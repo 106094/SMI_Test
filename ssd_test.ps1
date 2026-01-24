@@ -1,4 +1,4 @@
-Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy Bypass -Force
+﻿Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy Bypass -Force
   Add-Type -AssemblyName System.Windows.Forms,System.Drawing,Microsoft.VisualBasic
   $shell=New-Object -ComObject shell.application
     $ws=New-Object -ComObject wscript.shell
