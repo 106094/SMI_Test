@@ -1,3 +1,119 @@
+
+$psroot="$modulepath\clicktool"
+function installjava([int32]$ver,[switch]$testing){
+
+    $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    if (!$isAdmin) {
+        Start-Process powershell.exe -Verb RunAs -ArgumentList "-File `"$PSCommandPath`""
+        Exit
+    }
+
+$jdk_folder="$psroot\java\"
+if (!($env:JAVA_HOME -eq $jdk_folder)){
+    Write-Output "need install java"
+    $ver=23
+    $downloadlink=((Invoke-WebRequest https://jdk.java.net/$($ver)/).links|Where-Object {$_.href -match "windows" -and $_.innerHTML -eq "zip"}).href
+    $jdk_zip_file="$psroot\java.zip"
+    if(!$testing){
+    Invoke-WebRequest $downloadlink -OutFile $jdk_zip_file
+    Expand-Archive -Path $jdk_zip_file -DestinationPath "$psroot\java"
+    Remove-Item -Path $jdk_zip_file
+    }
+    $javabin=(get-childitem $psroot\java\ -Directory -r |Where-Object{$_.name -match "bin"}).FullName
+    # Set Environment Variables
+    $path = [System.Environment]::GetEnvironmentVariable('Path', 'Machine')
+    [System.Environment]::SetEnvironmentVariable('Path', $path + ';' + $javabin, 'Machine')
+
+    [Environment]::SetEnvironmentVariable('JAVA_HOME', $jdk_folder, 'Machine')
+    [Environment]::SetEnvironmentVariable('JDK_HOME', $jdk_folder, 'Machine')
+    [Environment]::SetEnvironmentVariable('JRE_HOME', $jdk_folder, 'Machine')
+    # Reload system environment variables
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", [System.EnvironmentVariableTarget]::Machine) + ";" + 
+    [System.Environment]::GetEnvironmentVariable("Path", [System.EnvironmentVariableTarget]::User)
+
+    $checkJavaInstall = & java -version 2>&1
+    Write-Output $checkJavaInstall
+}
+else{
+    java -version
+    Write-Output "already installed Java"
+}
+}
+function downloadsikuli{
+    $sikulipath="$psroot\sikulixide-2.0.5.jar"
+    if(!(test-path  $sikulipath)){
+        Invoke-WebRequest  "https://launchpad.net/sikuli/sikulix/2.0.5/+download/sikulixide-2.0.5.jar" -OutFile $sikulipath
+        if(test-path  $sikulipath){
+            Write-Output "sikuli downloaded ok"
+           }
+        }
+
+       else{
+        Write-Output "sikuli already downloaded"
+       }
+}
+
+function click([string]$imagef,[string]$foldername){
+    $success=$false
+    $pngs=Get-ChildItem ($psroot+"\click.sikuli\$($foldername)\$($imagef)\*.png")
+    $logspath="$psroot\SikuliLogs.txt"
+    $clickpng="$psroot\click.sikuli\click.png"
+    if(!(test-path  $logspath)){
+        New-Item -Path $logspath -ItemType File|out-null
+    }
+    foreach($png in $pngs){
+        $pngpath=$png.FullName
+        $pngname=$png.Name
+        Copy-Item -path $pngpath -Destination $clickpng -force
+        java -jar "$psroot\sikulixide-2.0.5.jar" -r $psroot\click.sikuli\ -v -f $psroot\SikuliLog.txt
+        $resultclick=get-content $psroot\SikuliLog.txt
+        if( $resultclick -like "*CLICK on*"){
+            $success=$true
+            break  
+        }           
+       remove-item $clickpng -Force            
+    }
+    if($success){
+        add-content $logspath -Value "$(get-date -Format "yy/MM/dd HH:mm:ss"): click on $($foldername)/$($imagef)/$($pngname) ok"
+         write-host "$(get-date -Format "yy/MM/dd HH:mm:ss"): click on $($foldername)/$($imagef)/$($pngname) ok" -ForegroundColor Green
+    }else{
+        add-content $logspath -Value "$(get-date -Format "yy/MM/dd HH:mm:ss"): click on $($foldername)/$($imagef) fail"
+        write-host "$(get-date -Format "yy/MM/dd HH:mm:ss"): click on $($foldername)/$($imagef) fail" -ForegroundColor red
+    }
+
+}
+
+function capture ([string]$foldername){
+    $capturef="$psroot\capture.sikuli\_capture.png"
+    if(test-path  $capturef -ea SilentlyContinue){
+    try{
+        remove-item $capturef -Force
+    }
+    catch{
+      write-host "error to delete capture file. Need to check" -ForegroundColor lightred
+      exit
+    }
+    }
+    java -jar "$psroot\sikulixide-2.0.5.jar" -r $psroot\capture.sikuli\ -v -f $psroot\SikuliLog.txt
+    #popup the name of the capture folder
+    $pngfolder="$psroot\click.sikuli\png\$($foldername)\"
+    if (!(test-path $pngfolder)){
+        New-Item -Path $pngfolder -ItemType Directory|out-null
+    }
+    $filepng=(get-date -Format "yyMMddHHmmss"|Out-String).trim()+".png"
+    $filefull=join-path $pngfolder $filepng
+    copy-item -path "$psroot\capture.sikuli\_capture.png" -Destination $filefull
+    remove-item $capturef -Force
+}
+
+$checkjava= java --version
+
+if(!$checkjava){
+installjava 23
+downloadsikuli
+}
+
+
 $cSource = @'
 using System;
 using System.Drawing;
@@ -236,14 +352,21 @@ public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
 }
 
 ### minimized cmd window ###
-@("cmd","powershell","ssd_test.exe")|ForEach-Object{
-$processname=$_
-$lastid= (Get-Process -name $processname -ea SilentlyContinue |Sort-Object StartTime  |Select-Object -last 1)
- if($lastid -and $lastid.mainwindowhandle -ne 0){
- Get-Process -id $lastid.id  | Set-WindowState -State MINIMIZE
- Start-Sleep -s 1
- }
- }
+function minimized {
+    param (
+    $hideappnames
+    )
+    $hideappnames|ForEach-Object{
+    $processname=$_
+    $lastid= (Get-Process -name $processname -ea SilentlyContinue |Sort-Object StartTime  |Select-Object -last 1)
+    if($lastid -and $lastid.mainwindowhandle -ne 0){
+    Get-Process -id $lastid.id  | Set-WindowState -State MINIMIZE
+    Start-Sleep -s 1
+    }
+    }
+    
+}
+
 
 Add-Type @"
 using System;
@@ -283,117 +406,93 @@ $graphics.Dispose()
 $bmp.Dispose()
 }
 
+function Get-AppWindowRect {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$ProcessName,
 
-$psroot="$modulepath\clicktool"
-function installjava([int32]$ver,[switch]$testing){
+        [ValidateSet('First','Largest','Newest')]
+        [string]$Pick = 'First',
+        [int]$ClickShiftX = 10,
+        [int]$ClickShiftY = 10,
+        [switch]$Activate,        
+        [switch]$shiftpercentage
+    )
 
-    $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-    if (!$isAdmin) {
-        Start-Process powershell.exe -Verb RunAs -ArgumentList "-File `"$PSCommandPath`""
-        Exit
+    # ---- Add Win32 type only once ----
+    if (-not ("Win32User32" -as [type])) {
+        Add-Type -Language CSharp -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+
+public static class Win32User32 {
+    [DllImport("user32.dll")]
+    public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+
+    [DllImport("user32.dll")]
+    public static extern bool IsIconic(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    [DllImport("user32.dll")]
+    public static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RECT {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+}
+"@
     }
 
-$jdk_folder="$psroot\java\"
-if (!($env:JAVA_HOME -eq $jdk_folder)){
-    Write-Output "need install java"
-    $ver=23
-    $downloadlink=((Invoke-WebRequest https://jdk.java.net/$($ver)/).links|Where-Object {$_.href -match "windows" -and $_.innerHTML -eq "zip"}).href
-    $jdk_zip_file="$psroot\java.zip"
-    if(!$testing){
-    Invoke-WebRequest $downloadlink -OutFile $jdk_zip_file
-    Expand-Archive -Path $jdk_zip_file -DestinationPath "$psroot\java"
-    Remove-Item -Path $jdk_zip_file
+    $procs = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue |
+             Where-Object { $_.MainWindowHandle -ne 0 }
+
+    if (-not $procs) { return $null }
+
+    $p = switch ($Pick) {
+        'Largest' { $procs | Sort-Object { $_.MainWindowRect.Width * $_.MainWindowRect.Height } -Descending | Select-Object -First 1 }
+        'Newest'  { $procs | Sort-Object StartTime -Descending | Select-Object -First 1 }
+        default   { $procs | Select-Object -First 1 }
     }
-    $javabin=(get-childitem $psroot\java\ -Directory -r |Where-Object{$_.name -match "bin"}).FullName
-    # Set Environment Variables
-    $path = [System.Environment]::GetEnvironmentVariable('Path', 'Machine')
-    [System.Environment]::SetEnvironmentVariable('Path', $path + ';' + $javabin, 'Machine')
 
-    [Environment]::SetEnvironmentVariable('JAVA_HOME', $jdk_folder, 'Machine')
-    [Environment]::SetEnvironmentVariable('JDK_HOME', $jdk_folder, 'Machine')
-    [Environment]::SetEnvironmentVariable('JRE_HOME', $jdk_folder, 'Machine')
-    # Reload system environment variables
-    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", [System.EnvironmentVariableTarget]::Machine) + ";" + 
-    [System.Environment]::GetEnvironmentVariable("Path", [System.EnvironmentVariableTarget]::User)
+    $hWnd = [IntPtr]$p.MainWindowHandle
 
-    $checkJavaInstall = & java -version 2>&1
-    Write-Output $checkJavaInstall
-}
-else{
-    java -version
-    Write-Output "already installed Java"
-}
-}
-function downloadsikuli{
-    $sikulipath="$psroot\sikulixide-2.0.5.jar"
-    if(!(test-path  $sikulipath)){
-        Invoke-WebRequest  "https://launchpad.net/sikuli/sikulix/2.0.5/+download/sikulixide-2.0.5.jar" -OutFile $sikulipath
-        if(test-path  $sikulipath){
-            Write-Output "sikuli downloaded ok"
-           }
+    if ($Activate) {
+        if ([Win32User32]::IsIconic($hWnd)) {
+            [Win32User32]::ShowWindow($hWnd, 9) | Out-Null  # SW_RESTORE
         }
-
-       else{
-        Write-Output "sikuli already downloaded"
-       }
-}
-
-function click([string]$imagef,[string]$foldername){
-    $success=$false
-    $pngs=Get-ChildItem ($psroot+"\click.sikuli\$($foldername)\$($imagef)\*.png")
-    $logspath="$psroot\SikuliLogs.txt"
-    $clickpng="$psroot\click.sikuli\click.png"
-    if(!(test-path  $logspath)){
-        New-Item -Path $logspath -ItemType File|out-null
-    }
-    foreach($png in $pngs){
-        $pngpath=$png.FullName
-        $pngname=$png.Name
-        Copy-Item -path $pngpath -Destination $clickpng -force
-        java -jar "$psroot\sikulixide-2.0.5.jar" -r $psroot\click.sikuli\ -v -f $psroot\SikuliLog.txt
-        $resultclick=get-content $psroot\SikuliLog.txt
-        if( $resultclick -like "*CLICK on*"){
-            $success=$true
-            break  
-        }           
-       remove-item $clickpng -Force            
-    }
-    if($success){
-        add-content $logspath -Value "$(get-date -Format "yy/MM/dd HH:mm:ss"): click on $($foldername)/$($imagef)/$($pngname) ok"
-         write-host "$(get-date -Format "yy/MM/dd HH:mm:ss"): click on $($foldername)/$($imagef)/$($pngname) ok" -ForegroundColor Green
-    }else{
-        add-content $logspath -Value "$(get-date -Format "yy/MM/dd HH:mm:ss"): click on $($foldername)/$($imagef) fail"
-        write-host "$(get-date -Format "yy/MM/dd HH:mm:ss"): click on $($foldername)/$($imagef) fail" -ForegroundColor red
+        [Win32User32]::SetForegroundWindow($hWnd) | Out-Null
+        Start-Sleep -Milliseconds 150
     }
 
-}
-
-function capture ([string]$foldername){
-    $capturef="$psroot\capture.sikuli\_capture.png"
-    if(test-path  $capturef -ea SilentlyContinue){
-    try{
-        remove-item $capturef -Force
+    $rect = New-Object Win32User32+RECT
+    if (-not [Win32User32]::GetWindowRect($hWnd, [ref]$rect)) {
+        throw "GetWindowRect failed for $ProcessName"
     }
-    catch{
-      write-host "error to delete capture file. Need to check" -ForegroundColor lightred
-      exit
+    $width = ($rect.Right - $rect.Left)
+    $height = ($rect.Bottom - $rect.Top)
+    if($shiftpercentage){
+        $ClickShiftX=$ClickShiftX/100*$width        
+        $ClickShiftY=$ClickShiftY/100*$height
     }
+    [PSCustomObject]@{
+        ProcessName = $p.ProcessName
+        Id          = $p.Id
+        Title       = $p.MainWindowTitle
+        Handle      = $hWnd
+        Left        = $rect.Left
+        Top         = $rect.Top
+        Right       = $rect.Right
+        Bottom      = $rect.Bottom
+        Width       = $width
+        Height      = $height
+        ClickX      = ($rect.Left + $ClickShiftX )
+        ClickY      = ($rect.Top  + $ClickShiftY)
     }
-    java -jar "$psroot\sikulixide-2.0.5.jar" -r $psroot\capture.sikuli\ -v -f $psroot\SikuliLog.txt
-    #popup the name of the capture folder
-    $pngfolder="$psroot\click.sikuli\png\$($foldername)\"
-    if (!(test-path $pngfolder)){
-        New-Item -Path $pngfolder -ItemType Directory|out-null
-    }
-    $filepng=(get-date -Format "yyMMddHHmmss"|Out-String).trim()+".png"
-    $filefull=join-path $pngfolder $filepng
-    copy-item -path "$psroot\capture.sikuli\_capture.png" -Destination $filefull
-    remove-item $capturef -Force
-}
-
-$checkjava= java --version
-
-if(!$checkjava){
-installjava 23
-downloadsikuli
 }
