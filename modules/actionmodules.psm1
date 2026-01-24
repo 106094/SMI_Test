@@ -74,6 +74,10 @@ function cdm($ini,[string]$logname){
     if($ini.length -ne 0){
         #set up ini
     }
+   $checkrun= get-process -name diskmark64 -ea SilentlyContinue
+    if($checkrun){
+      $checkrun.CloseMainWindow()
+    }
   $cdmexe="$usbroot\CrystalDiskMark\DiskMark64.exe"
   .$cdmexe
   start-sleep -s 5
@@ -135,5 +139,6 @@ function cdm($ini,[string]$logname){
      }
     rename-item $newfile.FullName -NewName $filename
     }
-
+  
+  (get-process -name diskmark64).CloseMainWindow()
 }
