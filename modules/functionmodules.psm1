@@ -496,3 +496,39 @@ public static class Win32User32 {
         ClickY      = ($rect.Top  + $ClickShiftY)
     }
 }
+
+function Get-PopupWindowText {
+    param(
+        [string]$TitleRegex = 'Format|Warning|Disk'
+    )
+
+    $root = [System.Windows.Automation.AutomationElement]::RootElement
+
+    $condition = New-Object System.Windows.Automation.PropertyCondition(
+        [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+        [System.Windows.Automation.ControlType]::Window
+    )
+
+    $windows = $root.FindAll(
+        [System.Windows.Automation.TreeScope]::Children,
+        $condition
+    )
+
+    foreach ($win in $windows) {
+        $name = $win.Current.Name
+        if ($name -match $TitleRegex) {
+            $texts = $win.FindAll(
+                [System.Windows.Automation.TreeScope]::Descendants,
+                (New-Object System.Windows.Automation.PropertyCondition(
+                    [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+                    [System.Windows.Automation.ControlType]::Text
+                ))
+            )
+
+            return [PSCustomObject]@{
+                Title = $name
+                Text  = ($texts | ForEach-Object { $_.Current.Name }) -join "`n"
+            }
+        }
+    }
+}

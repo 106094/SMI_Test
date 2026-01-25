@@ -1,7 +1,9 @@
 ﻿Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy Bypass -Force
   Add-Type -AssemblyName System.Windows.Forms,System.Drawing,Microsoft.VisualBasic
+  Add-Type -AssemblyName UIAutomationClient
+  Add-Type -AssemblyName UIAutomationTypes
   $shell=New-Object -ComObject shell.application
-    $ws=New-Object -ComObject wscript.shell
+  $ws=New-Object -ComObject wscript.shell
        
 $screen = [System.Windows.Forms.Screen]::PrimaryScreen
 $bounds = $screen.Bounds
@@ -18,51 +20,26 @@ if(!$rootpath -or $rootpath -like "*system32*"){
 $driverletter="D"
 $modulepath="$rootpath\modules"
 Import-Module $modulepath\functionmodules.psm1 -force
+Import-Module $modulepath\actionmodules.psm1 -force
 $logfolder="$rootpath\logs"
 $picfolder = "$logfolder\screenshots"
 if(!(test-path $picfolder)){
 new-item -itemtype directory $picfolder |Out-Null
 }
 $resultlogs=@()
-
-
-diskexplore -type "property" -picname "OS03-B"
+$script:formatresult=@()
+diskexploreaction -type "property" -picname "OS03-B"
 diskmgnt -type "partition_style" -picname "OS03-D"
-test-FileSizeOnDisk 1024 -index "OS06-C" #OS06-C
-test_diskClusterSize -DeviceType "FLASH" -index "OS06-D" #OS06-D
-$drive = Get-PSDrive -Name $driverletter
-$used  = $drive.Used
-$free  = $drive.Free
-$total = $used + $free
-Get-CimInstance Win32_Volume |
-Where-Object {
-    $_.FileSystem -eq 'NTFS' -and $_.DriveLetter -like "$driverletter*"
-} |
-ForEach-Object {
-    $clusterKB = $_.BlockSize / 1KB
-    [PSCustomObject]@{
-        Drive       = $_.DriveLetter
-        FileSystem  = $_.FileSystem
-        used        = $used
-        free        = $free
-        total       = $total
-        ClusterKB   = $clusterKB
-        Status      = if ($clusterKB -eq 4) { 'PASS' } else { 'FLAG_NON_DEFAULT' }
-    }
-}
+$file1024=test-FileSizeOnDisk 1024 -index "OS06-C" #OS06-C
+$clustercheck=test_diskClusterSize -DeviceType "FLASH" -index "OS06-D" #OS06-D
+
+diskexploreaction -type "format" -index "OS20_clean" #OS20 format
+diskexploreaction -type "format" -formatfile -formatfilesize 5GB -index "OS20_file" #OS20 with 5GB file copied before format
 
 #get text info
 $filesystem=(Get-Volume -DriveLetter $driverletter).FileSystem #OS03-C
 $diskNumber = (Get-Partition -DriveLetter $driverletter).DiskNumber
 $PartitionStyle=(Get-Disk -Number $diskNumber).PartitionStyle #OS03-E
-$resultlogs+=[PSCustomObject]@{
-    Device=""
-    Environment=""
-    TestName = ""
-    step=""
-    value=""
-    Result=""
-}
 
 $foldername="OS20"
 $clicknames="b"

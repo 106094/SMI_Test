@@ -14,11 +14,9 @@ function getusbinfo([string]$filepath){
         $btime=(Get-ChildItem $volfile).LastWriteTime
     }
 }
-
-function diskexplore([string]$type,[string]$picname){
-#from disk property to check file system type (e.g. FAT32, NTFS, exFAT)
+function diskexploropen{
 Start-Process explorer.exe -ArgumentList 'shell:MyComputerFolder' -WindowStyle Maximized
-start-sleep -s 6
+start-sleep -s 10
 [Clicker]::LeftClickAtPoint($screenwidth/2, $screenheight/2)
 start-sleep -s 1
 $ws.SendKeys("^+7") #Tiles view
@@ -27,14 +25,147 @@ $ws.SendKeys(" ")
 start-sleep -s 1
 $ws.SendKeys("{Right}")
 start-sleep -s 1
+}
+function diskexploreaction([string]$type,[string]$picname,[switch]$formatfile,$formatfilesize,[string]$index){
+#from disk property to check file system type (e.g. FAT32, NTFS, exFAT)
 if($type -eq "property"){
+diskexploropen
 $ws.SendKeys("%{Enter}")
 start-sleep -s 2
 screenshot -picpath $picfolder -picname $picname
 $ws.SendKeys("%{F4}")
 start-sleep -s 1
-}
 $ws.SendKeys("%{F4}")
+}
+if($type -eq "format"){
+$copytakes="-"
+if($formatfile){
+    if($formatfilesize -ge 1GB){
+        $filename="$($formatfilesize/1GB)GB"
+    }
+    elseif($formatfilesize -ge 1MB){
+        $filename="$($formatfilesize/1MB)MB"
+    }
+    
+    $filefull=(join-path $logfolder "$($filename).bin").ToString()
+    if(!(test-path $filefull)){
+    fsutil file createnew $filefull $formatfilesize|Out-Null
+    }
+    Format-Volume -DriveLetter "$($driverletter)" -FileSystem exFAT -AllocationUnitSize 16384 -Force
+    $timeout = (Get-Date).AddSeconds(30)
+    do {
+    Start-Sleep -Milliseconds 300
+    $vol = Get-Volume -DriveLetter $driverletter -ErrorAction SilentlyContinue
+    } while (-not $vol -and (Get-Date) -lt $timeout)
+}
+$ws.SendKeys("+{F10}")
+start-sleep -s 1
+$ws.SendKeys("a")
+#decide which file sys/alllocate to run
+$systypes=@(1,2,3)
+$alllocatesizes=@(13,4,15)
+$run=0
+$systypes=@(1,2,3)
+$alllocatesizes=@(13,4,15)
+$run=0
+foreach($sys in $systypes){
+$sysdown=$systypes[$run]
+$y=0
+$alllocatedown=$alllocatesizes[$run]-$y
+for ($i=1;$i -le $alllocatedown;$i++){
+write-output "filesystem:$($sysdown), alllocation unit size:$($i)"
+    diskexploropen
+    if($formatfile){
+    $dest = "$driverletter`:\"
+    $sw = [Diagnostics.Stopwatch]::StartNew()
+    Copy-Item -Path $filefull -Destination $dest -Force -ErrorAction Stop
+    $sw.Stop()
+    $copytakes="$([math]::Round($sw.Elapsed.TotalSeconds,2)) sec"
+    $minutes = [int]$sw.Elapsed.TotalMinutes
+    $seconds = [int] $sw.Elapsed.Seconds
+    $totalsecs = $runningtime.TotalSeconds
+    $copytakes = "{0}min {1}s" -f $minutes, $seconds
+    }
+#file sys select
+start-sleep -s 1
+$ws.SendKeys("%f")
+start-sleep -s 1
+for ($j=0;$j -lt 5;$j++){
+$ws.SendKeys("{UP}") #reset to top one
+start-sleep -Milliseconds 500
+}
+for ($j=0;$j -lt $sysdown-1;$j++){
+$ws.SendKeys("{Down}")
+start-sleep -Milliseconds 500
+}
+$ws.SendKeys("%a")
+start-sleep -s 1
+$ws.SendKeys("d") #reset to top one
+start-sleep -Milliseconds 500
+for ($j=1;$j -le $i;$j++){
+$ws.SendKeys("{Down}")
+start-sleep -Milliseconds 500
+}
+screenshot -picpath $picfolder -picname "$($index)_$($sysdown)_$($i)"
+#start
+start-sleep -s 1
+$ws.SendKeys("%s")
+#check warning
+$poptext=""
+while(!($poptext -like "*click OK*")){
+$poptext=(Get-PopupWindowText -TitleRegex 'Format').text
+start-sleep -Milliseconds 100
+}
+$ws.SendKeys(" ")
+$starttime=get-date
+#check complete
+$poptext=""
+while(!($poptext -like "*Complete*")){
+$poptext=(Get-PopupWindowText -TitleRegex 'Format').text
+start-sleep -Milliseconds 100
+}
+$endttime=get-date
+start-sleep -s 1
+$ws.SendKeys(" ")
+start-sleep -s 1
+   $runningtime=(New-TimeSpan -start $starttime -end $endttime)
+   $minutes = [int]($runningtime.TotalMinutes)
+   $seconds = [int]($runningtime.Seconds)
+   $totalsecs =[math]::round($runningtime.TotalSeconds,1)
+   $runtimeText = "{0}min {1}s" -f $minutes, $seconds
+   #write-output "format tooks: $runtimeText"
+    $vol = Get-Volume -DriveLetter $driverletter
+    $actualFS       = $vol.FileSystem
+    $actualCluster  = $vol.AllocationUnitSize
+    $actualalll  = "{0} bytes" -f ($actualCluster)
+    if ($actualCluster -ge 10KB) {
+       $actualalll = "{0} kilibytes" -f ($Bytes / 1KB)
+    }
+    $sizeGB = [math]::Round($vol.Size / 1GB,2)
+    $formattime = "$($totalsecs)s ($($runtimeText))"
+    $driverpath="$($driverletter):"
+    $logtime=get-date -format "yy/MM/dd HH:mm:ss"
+    $script:formatresult=[PSCustomObject]@{
+    Drive              = $driverpath
+    FileSystem         = $actualFS
+    AllocationUnitSize = $actualalll
+    formattime        =  $formattime
+    VolumeSize_GB      = $sizeGB
+    copyfiletime       = $copytakes
+    Result             = ""
+    Index              = $index
+    logtime            = $logtime
+    }
+    $script:formatresults+=$script:formatresult
+    return $script:formatresult
+$y++
+$ws.SendKeys("%c")
+start-sleep -s 1
+$ws.SendKeys("%{F4}")
+}
+$run++
+}
+}
 }
 
 function diskmgnt([string]$type,[string]$picname){
@@ -46,13 +177,18 @@ $proc = Get-Process mmc | Where-Object {
 }
 Get-Process -id  $proc.id | Set-WindowState -State MAXIMIZE
 start-sleep -s 1
+#reset view to disk
+
+$ws.SendKeys("%")
+start-sleep -Milliseconds 500
+$ws.SendKeys("v")
+start-sleep -Milliseconds 500
+$ws.SendKeys("o")
+start-sleep -Milliseconds 500
+$ws.SendKeys("d")
+start-sleep -Milliseconds 500
+
 if($type -eq "partition_style"){
-$ws.SendKeys("{DOWN}")
-start-sleep -Milliseconds 200
-$ws.SendKeys("{DOWN}")
-start-sleep -Milliseconds 200
-$ws.SendKeys("{DOWN}")
-start-sleep -Milliseconds 200
 $ws.SendKeys("{DOWN}")
 start-sleep -s 1
 $ws.SendKeys("{LEFT}")
@@ -155,7 +291,7 @@ function test-FileSizeOnDisk {
     $file = Get-Item $Path
     $vol = Get-CimInstance Win32_Volume -Filter "DriveLetter='$($driverletter):'"
     # expected allocation
-    $clusterSize = $vol.BlockSize
+    #$clusterSize = $vol.BlockSize
     $fileSize = $file.Length
 
     $result =
@@ -212,6 +348,7 @@ function test_diskClusterSize {
             'FAIL_CLUSTER_SIZE_MISMATCH'
         }
 
+    $logtime=get-date -format "yy/MM/dd HH:mm:ss"
     [PSCustomObject]@{
         Drive          = "$($driverletter):"
         DeviceType     = $DeviceType
@@ -219,7 +356,8 @@ function test_diskClusterSize {
         ClusterSize_KB = $clusterKB
         Expected_KB    = $expectedKB
         Result         = $result
-        Index                = $index
+        Index          = $index
+        logtime        = $logtime
     }
 }
 
@@ -246,4 +384,72 @@ function Get-FsMatrixGuiLike {
 
     return $matrix
 }
-$FsMatrix = Get-FsMatrixGuiLike -DriveLetter D
+function New-FsutilFile {
+    param(
+        [Parameter(Mandatory, ParameterSetName='BySize')]
+        [Int64]$SizeBytes,
+        [Parameter(ParameterSetName='FillDisk')]
+        [switch]$FillDisk,
+        [Parameter(ParameterSetName='FillDisk')]
+        [Int64]$ReserveBytes = 10MB,
+        [string]$FileName = 'fsutil_test.bin',
+        [string]$Filepath
+    )
+
+    $path = "$($driverletter)`:\$FileName"
+    if($Filepath.Length -gt 0){
+        $path = Join-Path $Filepath $FileName
+    }
+    Remove-Item $path -Force -ErrorAction SilentlyContinue
+        $psd = Get-PSDrive -Name $driverletter
+        $free = $psd.Free
+        if($FillDisk){
+        $SizeBytes = $free - $ReserveBytes
+        }
+        $cheklog=fsutil file createnew $path $SizeBytes
+        while($cheklog -match "not enough space"){
+            $ReserveBytes+=10MB
+            $SizeBytes = $free - $ReserveBytes
+            $SizeBytes        
+            $cheklog=fsutil file createnew $path $SizeBytes
+        }
+    # verify result
+    $f = Get-Item $path
+    $Size_MB="$([math]::Round($f.Length / 1MB,2)) MB"
+    $Size_GB="$([math]::Round($f.Length/ 1GB,2)) GB" 
+    [PSCustomObject]@{
+        Path        = $path
+        Size_Bytes  = $f.Length
+        Size_MB     = $Size_MB
+        Size_GB     = $Size_GB
+        Drive       = "$($driverletter):"
+        Mode        = $PSCmdlet.ParameterSetName
+        Free_After  = (Get-PSDrive -Name $driverletter).Free
+    }
+}
+
+function getdiskinfo([string]$index){
+    $drive = Get-PSDrive -Name $driverletter
+    $used  = $drive.Used
+    $free  = $drive.Free
+    $total = $used + $free
+    $logtime=get-date -format "yy/MM/dd HH:mm:ss"
+    Get-CimInstance Win32_Volume |
+    Where-Object {
+        $_.FileSystem -eq 'NTFS' -and $_.DriveLetter -like "$driverletter*"
+    } |
+    ForEach-Object {
+        $clusterKB = $_.BlockSize / 1KB
+        [PSCustomObject]@{
+            Drive       = $_.DriveLetter
+            FileSystem  = $_.FileSystem
+            used        = $used
+            free        = $free
+            total       = $total
+            ClusterKB   = $clusterKB
+            Status      = if ($clusterKB -eq 4) { 'PASS' } else { 'FLAG_NON_DEFAULT' } 
+            Index       = $index
+            logtime     = $logtime
+        }
+    }
+}
