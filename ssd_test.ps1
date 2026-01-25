@@ -27,6 +27,7 @@ $picfolder = "$logfolder\screenshots"
 if(!(test-path $picfolder)){
 new-item -itemtype directory $picfolder |Out-Null
 }
+
 #skip test
 <#
 diskexploreaction -type "property" -picname "OS03-B"
@@ -36,7 +37,8 @@ $clustercheck=test_diskClusterSize -DeviceType "FLASH" -index "OS06-D" #OS06-D
 #>
 diskexploreaction -type "format" -index "OS20_clean" #OS20 format
 diskexploreaction -type "format" -formatfile -formatfilesize 5GB -index "OS20_file" #OS20 with 5GB file copied before format
-
+$csvlog=csvlogname -filename "OS20_formatMatrix"
+$global:formatresults|export-csv -Path $csvlog -Encoding UTF8 -NoTypeInformation
 #get text info
 $filesystem=(Get-Volume -DriveLetter $driverletter).FileSystem #OS03-C
 $diskNumber = (Get-Partition -DriveLetter $driverletter).DiskNumber

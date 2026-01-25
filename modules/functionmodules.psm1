@@ -532,3 +532,9 @@ function Get-PopupWindowText {
         }
     }
 }
+function csvlogname([string]$filename){
+$datetime=get-date -format "_yyMMdd_HHmmss"
+$filenname="$($filename)$($datetime).csv"
+$outfilenname=(join-path $logfolder $filenname).ToString()
+return $outfilenname
+}
