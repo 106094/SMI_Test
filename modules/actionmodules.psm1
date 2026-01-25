@@ -130,8 +130,8 @@ $ws.SendKeys(" ")
 start-sleep -s 1
    $runningtime=(New-TimeSpan -start $starttime -end $endttime)
    $minutes = [int]($runningtime.TotalMinutes)
-   $seconds = [int]($runningtime.Seconds)
-   $totalsecs =[math]::round($runningtime.TotalSeconds,1)
+   $seconds = [math]::round($runningtime.TotalSeconds % 60,2)
+   $totalsecs =[math]::round($runningtime.TotalSeconds,2 )
    $runtimeText = "{0}min {1}s" -f $minutes, $seconds
    #write-output "format tooks: $runtimeText"
     $vol = Get-Volume -DriveLetter $driverletter
@@ -145,7 +145,7 @@ start-sleep -s 1
     $formattime = "$($totalsecs)s ($($runtimeText))"
     $driverpath="$($driverletter):"
     $logtime=get-date -format "yy/MM/dd HH:mm:ss"
-    $script:formatresult=[PSCustomObject]@{
+    $formatresult=[PSCustomObject]@{
     Drive              = $driverpath
     FileSystem         = $actualFS
     AllocationUnitSize = $actualalll
@@ -156,8 +156,8 @@ start-sleep -s 1
     Index              = $index
     logtime            = $logtime
     }
-    $script:formatresults+=$script:formatresult
-    $script:formatresult
+    $global:formatresults+=$formatresult
+    $formatresult
 $ws.SendKeys("%{F4}")
 start-sleep -s 1
 }

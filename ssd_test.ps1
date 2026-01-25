@@ -17,6 +17,7 @@ if ($PSScriptRoot) {
 if(!$rootpath -or $rootpath -like "*system32*"){
     $rootpath="$env:userprofile\Desktop\Main\SMI_Test"
 }
+$global:formatresults=@()
 $driverletter="D"
 $modulepath="$rootpath\modules"
 Import-Module $modulepath\functionmodules.psm1 -force
@@ -26,8 +27,6 @@ $picfolder = "$logfolder\screenshots"
 if(!(test-path $picfolder)){
 new-item -itemtype directory $picfolder |Out-Null
 }
-$resultlogs=@()
-$script:formatresult=@()
 #skip test
 <#
 diskexploreaction -type "property" -picname "OS03-B"
