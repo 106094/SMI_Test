@@ -58,24 +58,18 @@ if($formatfile){
     $vol = Get-Volume -DriveLetter $driverletter -ErrorAction SilentlyContinue
     } while (-not $vol -and (Get-Date) -lt $timeout)
 }
-$ws.SendKeys("+{F10}")
-start-sleep -s 1
-$ws.SendKeys("a")
 #decide which file sys/alllocate to run
 $systypes=@(1,2,3)
 $alllocatesizes=@(13,4,15)
 $run=0
-$systypes=@(1,2,3)
-$alllocatesizes=@(13,4,15)
-$run=0
+
+diskexploropen
 foreach($sys in $systypes){
 $sysdown=$systypes[$run]
-$y=0
-$alllocatedown=$alllocatesizes[$run]-$y
+$alllocatedown=$alllocatesizes[$run]
 for ($i=1;$i -le $alllocatedown;$i++){
-write-output "filesystem:$($sysdown), alllocation unit size:$($i)"
-    diskexploropen
-    if($formatfile){
+   write-output "filesystem:$($sysdown), alllocation unit size:$($i)"
+   if($formatfile){
     $dest = "$driverletter`:\"
     $sw = [Diagnostics.Stopwatch]::StartNew()
     Copy-Item -Path $filefull -Destination $dest -Force -ErrorAction Stop
@@ -86,6 +80,11 @@ write-output "filesystem:$($sysdown), alllocation unit size:$($i)"
     $totalsecs = $runningtime.TotalSeconds
     $copytakes = "{0}min {1}s" -f $minutes, $seconds
     }
+    $ws.SendKeys("{F5}")
+    start-sleep -s 2
+    $ws.SendKeys("+{F10}")
+    start-sleep -s 1
+    $ws.SendKeys("a")
 #file sys select
 start-sleep -s 1
 $ws.SendKeys("%f")
@@ -102,13 +101,12 @@ $ws.SendKeys("%a")
 start-sleep -s 1
 $ws.SendKeys("d") #reset to top one
 start-sleep -Milliseconds 500
-for ($j=1;$j -le $i;$j++){
+for ($j=0;$j -lt $i;$j++){
 $ws.SendKeys("{Down}")
 start-sleep -Milliseconds 500
 }
-screenshot -picpath $picfolder -picname "$($index)_$($sysdown)_$($i)"
+screenshot -picpath $picfolder -picname "$($index)_$($sysdown)_$($i)_settings"
 #start
-start-sleep -s 1
 $ws.SendKeys("%s")
 #check warning
 $poptext=""
@@ -124,6 +122,8 @@ while(!($poptext -like "*Complete*")){
 $poptext=(Get-PopupWindowText -TitleRegex 'Format').text
 start-sleep -Milliseconds 100
 }
+Start-Sleep -s 1
+screenshot -picpath $picfolder -picname "$($index)_$($sysdown)_$($i)_Complete"
 $endttime=get-date
 start-sleep -s 1
 $ws.SendKeys(" ")
@@ -157,14 +157,14 @@ start-sleep -s 1
     logtime            = $logtime
     }
     $script:formatresults+=$script:formatresult
-    return $script:formatresult
-$y++
-$ws.SendKeys("%c")
-start-sleep -s 1
+    $script:formatresult
 $ws.SendKeys("%{F4}")
+start-sleep -s 1
 }
 $run++
 }
+$ws.SendKeys("%{F4}")
+start-sleep -s 1
 }
 }
 

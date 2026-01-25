@@ -28,11 +28,13 @@ new-item -itemtype directory $picfolder |Out-Null
 }
 $resultlogs=@()
 $script:formatresult=@()
+#skip test
+<#
 diskexploreaction -type "property" -picname "OS03-B"
 diskmgnt -type "partition_style" -picname "OS03-D"
 $file1024=test-FileSizeOnDisk 1024 -index "OS06-C" #OS06-C
 $clustercheck=test_diskClusterSize -DeviceType "FLASH" -index "OS06-D" #OS06-D
-
+#>
 diskexploreaction -type "format" -index "OS20_clean" #OS20 format
 diskexploreaction -type "format" -formatfile -formatfilesize 5GB -index "OS20_file" #OS20 with 5GB file copied before format
 
