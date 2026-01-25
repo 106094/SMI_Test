@@ -142,3 +142,108 @@ function cdm($ini,[string]$logname){
   
   (get-process -name diskmark64).CloseMainWindow()
 }
+
+function test-FileSizeOnDisk {
+    param(
+        [Parameter(Mandatory)]
+        [int]$xbypes,
+        [string]$index
+    )
+    $Path="$($driverletter):\filename.txt"
+    remove-item $Path -ErrorAction SilentlyContinue
+    fsutil file createnew $Path $xbypes|out-null
+    $file = Get-Item $Path
+    $vol = Get-CimInstance Win32_Volume -Filter "DriveLetter='$($driverletter):'"
+    # expected allocation
+    $clusterSize = $vol.BlockSize
+    $fileSize = $file.Length
+
+    $result =
+        if ($fileSize -eq $xbypes ) {
+            'PASS'
+        }
+        else{
+            'FAIL'
+        }
+
+    [PSCustomObject]@{
+        File                 = $file.Name
+        FileSize_Bytes       = $fileSize
+        Result               = $result
+        Index                = $index
+    }
+}
+function test_diskClusterSize {
+    param(
+        [Parameter(Mandatory)]
+        [ValidateSet('FLASH','SSD')]
+        [string]$DeviceType,
+        [string]$index
+    )
+
+    $vol = Get-CimInstance Win32_Volume -Filter "DriveLetter='$($driverletter):'"
+    if (-not $vol) { throw "Drive $($driverletter) not found" }
+
+    $clusterKB = $vol.BlockSize / 1KB
+    $sizeGB = [math]::Round($vol.Capacity / 1GB)
+
+    # ---- expected cluster size ----
+    if ($DeviceType -eq 'SSD') {
+        $expectedKB = 1024
+    }
+    else {
+        $expectedKB = switch ($sizeGB) {
+            { $_ -le 32 }   { 16; break }
+            { $_ -le 256 }  { 32; break }
+            { $_ -le 1024 } { 64; break }
+            default         { 'UNKNOWN' }
+        }
+    }
+
+    # ---- judgement ----
+    $result =
+        if ($expectedKB -eq 'UNKNOWN') {
+            'FAIL_UNKNOWN_CAPACITY'
+        }
+        elseif ($clusterKB -eq $expectedKB) {
+            'PASS'
+        }
+        else {
+            'FAIL_CLUSTER_SIZE_MISMATCH'
+        }
+
+    [PSCustomObject]@{
+        Drive          = "$($driverletter):"
+        DeviceType     = $DeviceType
+        Capacity_GB    = $sizeGB
+        ClusterSize_KB = $clusterKB
+        Expected_KB    = $expectedKB
+        Result         = $result
+        Index                = $index
+    }
+}
+
+
+function Get-FsMatrixGuiLike {
+
+    $vol = Get-Volume -DriveLetter $driverletter -ErrorAction Stop
+    $sizeGB = $vol.Size / 1GB
+
+    $matrix = @{}
+    $ntfsKB = @(0.5, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048)
+    $matrix['NTFS'] = $ntfsKB | ForEach-Object { [int]($_ * 1024) }   # bytes
+
+    # ---- exFAT (common valid set) ----
+    $exfatKB = @(4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048)
+    $matrix['exFAT'] = $exfatKB | ForEach-Object { $_ * 1024 }
+
+    # ---- FAT32 (Windows format support is limited; keep realistic) ----
+    # FAT32 on large volumes often blocked by Windows tools.
+    if ($sizeGB -le 2048) {
+        $fat32KB = @(4, 8, 16, 32, 64)
+        $matrix['FAT32'] = $fat32KB | ForEach-Object { $_ * 1024 }
+    }
+
+    return $matrix
+}
+$FsMatrix = Get-FsMatrixGuiLike -DriveLetter D

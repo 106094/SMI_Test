@@ -28,6 +28,29 @@ $resultlogs=@()
 
 diskexplore -type "property" -picname "OS03-B"
 diskmgnt -type "partition_style" -picname "OS03-D"
+test-FileSizeOnDisk 1024 -index "OS06-C" #OS06-C
+test_diskClusterSize -DeviceType "FLASH" -index "OS06-D" #OS06-D
+$drive = Get-PSDrive -Name $driverletter
+$used  = $drive.Used
+$free  = $drive.Free
+$total = $used + $free
+Get-CimInstance Win32_Volume |
+Where-Object {
+    $_.FileSystem -eq 'NTFS' -and $_.DriveLetter -like "$driverletter*"
+} |
+ForEach-Object {
+    $clusterKB = $_.BlockSize / 1KB
+    [PSCustomObject]@{
+        Drive       = $_.DriveLetter
+        FileSystem  = $_.FileSystem
+        used        = $used
+        free        = $free
+        total       = $total
+        ClusterKB   = $clusterKB
+        Status      = if ($clusterKB -eq 4) { 'PASS' } else { 'FLAG_NON_DEFAULT' }
+    }
+}
+
 #get text info
 $filesystem=(Get-Volume -DriveLetter $driverletter).FileSystem #OS03-C
 $diskNumber = (Get-Partition -DriveLetter $driverletter).DiskNumber
