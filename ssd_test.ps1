@@ -31,7 +31,11 @@ Import-Module $modulepath\actionmodules.psm1 -force
 if (!(test-path $modulepath\usbtool)){
 Expand-Archive -Path $modulepath\usbtool.zip -DestinationPath $modulepath\usbtool
 }
-$driverletter=$(get_driverletter).replace(":","")
+$diskpath=get_driverletter
+if(!$diskpath){
+    exit
+}
+$driverletter=$($diskpath).replace(":","")
 $logfolder="$rootpath\logs"
 $picfolder = "$logfolder\screenshots"
 if(!(test-path $picfolder)){
