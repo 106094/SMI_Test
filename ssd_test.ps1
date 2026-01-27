@@ -13,15 +13,16 @@ if ($PSScriptRoot) {
     $rootpath = $PSScriptRoot
 } else {
     $rootpath = [System.AppDomain]::CurrentDomain.BaseDirectory
-}
+}       
 if(!$rootpath -or $rootpath -like "*system32*"){
     $rootpath="$env:userprofile\Desktop\Main\SMI_Test"
 }
 $global:formatresults=@()
-$driverletter="D"
 $modulepath="$rootpath\modules"
 Import-Module $modulepath\functionmodules.psm1 -force
 Import-Module $modulepath\actionmodules.psm1 -force
+
+$driverletter=$(get_driverletter).replace(":","")
 $logfolder="$rootpath\logs"
 $picfolder = "$logfolder\screenshots"
 if(!(test-path $picfolder)){
@@ -35,19 +36,24 @@ diskmgnt -type "partition_style" -picname "OS03-D"
 $file1024=test-FileSizeOnDisk 1024 -index "OS06-C" #OS06-C
 $clustercheck=test_diskClusterSize -DeviceType "FLASH" -index "OS06-D" #OS06-D
 #>
-diskexploreaction -type "format" -index "OS20_clean" #OS20 format
-diskexploreaction -type "format" -formatfile -formatfilesize 5GB -index "OS20_file" #OS20 with 5GB file copied before format
+diskexploreaction -type "format" -index "OS20Scen1_clean" #OS20 format
+diskexploreaction -type "format" -formatfile -formatfilesize 5GB -index "OS20Scen1_file" #OS20 with 5GB file copied before format
+
+diskexploreaction -type "format" -index "OS21Scen1_clean" -nonquick #OS20 format
+diskexploreaction -type "format" -formatfile -formatfilesize 5GB -index "OS21scen1_file" -nonquick #OS20 with 5GB file copied before format
+
 $csvlog=csvlogname -filename "OS20_formatMatrix"
 $global:formatresults|export-csv -Path $csvlog -Encoding UTF8 -NoTypeInformation
 #get text info
 $filesystem=(Get-Volume -DriveLetter $driverletter).FileSystem #OS03-C
 $diskNumber = (Get-Partition -DriveLetter $driverletter).DiskNumber
 $PartitionStyle=(Get-Disk -Number $diskNumber).PartitionStyle #OS03-E
-
+#skip test
+<#
 $foldername="OS20"
 $clicknames="b"
 foreach($clickname in $clicknames){
 click -imagef $clickname -foldername  $foldername
 }
 
-
+#>

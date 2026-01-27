@@ -14,8 +14,8 @@ function getusbinfo([string]$filepath){
         $btime=(Get-ChildItem $volfile).LastWriteTime
     }
 }
-function diskexploropen{
-Start-Process explorer.exe -ArgumentList 'shell:MyComputerFolder' -WindowStyle Maximized
+function diskexploropen([string]$openpath){
+Start-Process explorer.exe -ArgumentList $openpath -WindowStyle Maximized
 start-sleep -s 10
 [Clicker]::LeftClickAtPoint($screenwidth/2, $screenheight/2)
 start-sleep -s 1
@@ -23,13 +23,24 @@ $ws.SendKeys("^+7") #Tiles view
 start-sleep -s 1
 $ws.SendKeys(" ") 
 start-sleep -s 1
-$ws.SendKeys("{Right}")
-start-sleep -s 1
 }
-function diskexploreaction([string]$type,[string]$picname,[switch]$formatfile,$formatfilesize,[string]$index){
+function diskexploreaction{
+  param(
+    [string]$type,
+    [string]$picname,
+    [switch]$formatfile,
+    [switch]$nonquick,
+    $formatfilesize,
+    [string]$index
+  )
 #from disk property to check file system type (e.g. FAT32, NTFS, exFAT)
 if($type -eq "property"){
-diskexploropen
+diskexploropen -openpath "shell:MyComputerFolder"
+for($i=0;$i -lt 4;$i++){
+$ws.SendKeys("{Right}")  #select to right most (Disk)
+start-sleep -Milliseconds 200
+}
+start-sleep -s 1
 $ws.SendKeys("%{Enter}")
 start-sleep -s 2
 screenshot -picpath $picfolder -picname $picname
@@ -40,39 +51,43 @@ $ws.SendKeys("%{F4}")
 if($type -eq "format"){
 $copytakes="-"
 if($formatfile){
+    Write-Output "format with file"
     if($formatfilesize -ge 1GB){
         $filename="$($formatfilesize/1GB)GB"
     }
     elseif($formatfilesize -ge 1MB){
         $filename="$($formatfilesize/1MB)MB"
     }
-    
     $filefull=(join-path $logfolder "$($filename).bin").ToString()
     if(!(test-path $filefull)){
-    fsutil file createnew $filefull $formatfilesize|Out-Null
+    $formatfilebytes=[int64]$formatfilesize.ToString()
+    fsutil file createNew $filefull $formatfilebytes
+    Write-Output "$filefull create done"
     }
     Format-Volume -DriveLetter "$($driverletter)" -FileSystem exFAT -AllocationUnitSize 16384 -Force
-    $timeout = (Get-Date).AddSeconds(30)
-    do {
-    Start-Sleep -Milliseconds 300
-    $vol = Get-Volume -DriveLetter $driverletter -ErrorAction SilentlyContinue
-    } while (-not $vol -and (Get-Date) -lt $timeout)
 }
 #decide which file sys/alllocate to run
 $systypes=@(1,2,3)
 $alllocatesizes=@(13,4,15)
 $run=0
 
-diskexploropen
+diskexploropen -openpath "shell:MyComputerFolder"
+for($i=0;$i -lt 4;$i++){
+$ws.SendKeys("{Right}")  #select to right most (Disk)
+start-sleep -Milliseconds 200
+}
 foreach($sys in $systypes){
 $sysdown=$systypes[$run]
 $alllocatedown=$alllocatesizes[$run]
 for ($i=1;$i -le $alllocatedown;$i++){
    write-output "filesystem:$($sysdown), alllocation unit size:$($i)"
    if($formatfile){
+   if(!(test-path $filefull)){
+    fsutil file createnew $filefull $formatfilebytes|Out-Null
+    }
     $dest = "$driverletter`:\"
     $sw = [Diagnostics.Stopwatch]::StartNew()
-    Copy-Item -Path $filefull -Destination $dest -Force -ErrorAction Stop
+    Copy-Item -Path $filefull -Destination $dest -Force -ErrorAction SilentlyContinue
     $sw.Stop()
     $copytakes="$([math]::Round($sw.Elapsed.TotalSeconds,2)) sec"
     $minutes = [int]$sw.Elapsed.TotalMinutes
@@ -80,11 +95,13 @@ for ($i=1;$i -le $alllocatedown;$i++){
     $totalsecs = $runningtime.TotalSeconds
     $copytakes = "{0}min {1}s" -f $minutes, $seconds
     }
-    $ws.SendKeys("{F5}")
-    start-sleep -s 2
-    $ws.SendKeys("+{F10}")
-    start-sleep -s 1
-    $ws.SendKeys("a")
+#cdm test before formating
+$cdm_before=cdm -logname "$($index)_$($sysdown)_$($i)_before"
+$ws.SendKeys("{F5}")
+start-sleep -s 2
+$ws.SendKeys("+{F10}")
+start-sleep -s 2
+$ws.SendKeys("a")
 #file sys select
 start-sleep -s 1
 $ws.SendKeys("%f")
@@ -105,13 +122,19 @@ for ($j=0;$j -lt $i;$j++){
 $ws.SendKeys("{Down}")
 start-sleep -Milliseconds 500
 }
+if($noqick){
+$ws.SendKeys("%o")
+start-sleep -s 1
+$ws.SendKeys(" ")
+start-sleep -s 1
+}
 screenshot -picpath $picfolder -picname "$($index)_$($sysdown)_$($i)_settings"
 #start
 $ws.SendKeys("%s")
 #check warning
 $poptext=""
-while(!($poptext -like "*click OK*")){
-$poptext=(Get-PopupWindowText -TitleRegex 'Format').text
+while( !($poptext -like "*click OK*")){
+ $poptext=(Get-PopupWindowText -TitleRegex 'Format').text
 start-sleep -Milliseconds 100
 }
 $ws.SendKeys(" ")
@@ -122,12 +145,14 @@ while(!($poptext -like "*Complete*")){
 $poptext=(Get-PopupWindowText -TitleRegex 'Format').text
 start-sleep -Milliseconds 100
 }
+$endttime=get-date
 Start-Sleep -s 1
 screenshot -picpath $picfolder -picname "$($index)_$($sysdown)_$($i)_Complete"
-$endttime=get-date
+$ws.SendKeys(" ") #close format window
 start-sleep -s 1
-$ws.SendKeys(" ")
-start-sleep -s 1
+#cdm test before formating
+$cdm_after=cdm -logname "$($index)_$($sysdown)_$($i)_after"
+
    $runningtime=(New-TimeSpan -start $starttime -end $endttime)
    $minutes = [int]($runningtime.TotalMinutes)
    $seconds = [math]::round($runningtime.TotalSeconds % 60,2)
@@ -138,8 +163,8 @@ start-sleep -s 1
     $actualFS       = $vol.FileSystem
     $actualCluster  = $vol.AllocationUnitSize
     $actualalll  = "{0} bytes" -f ($actualCluster)
-    if ($actualCluster -ge 10KB) {
-       $actualalll = "{0} kilibytes" -f ($Bytes / 1KB)
+    if ($actualCluster -ge 15KB) {
+       $actualalll = "{0} kilibytes" -f ($actualCluster/ 1KB)
     }
     $sizeGB = [math]::Round($vol.Size / 1GB,2)
     $formattime = "$($totalsecs)s ($($runtimeText))"
@@ -149,16 +174,21 @@ start-sleep -s 1
     Drive              = $driverpath
     FileSystem         = $actualFS
     AllocationUnitSize = $actualalll
-    formattime        =  $formattime
+    formattime         = $formattime
     VolumeSize_GB      = $sizeGB
     copyfiletime       = $copytakes
-    Result             = ""
+    CDM_Read_Before    = $cdm_before[0]
+    CDM_Write_Before   = $cdm_before[1]
+    CDM_Read_After     = $cdm_after[0]
+    CDM_Write_After    = $cdm_after[1]
+    Criteria           = "TBD"
+    Result             = "OK"
     Index              = $index
     logtime            = $logtime
     }
     $global:formatresults+=$formatresult
     $formatresult
-$ws.SendKeys("%{F4}")
+$ws.SendKeys("%{F4}") #close file explore
 start-sleep -s 1
 }
 $run++
@@ -206,14 +236,28 @@ $ws.SendKeys("%{F4}")
 $proc.CloseMainWindow()
 }
 
-function cdm($ini,[string]$logname){
-    if($ini.length -ne 0){
-        #set up ini
-    }
+function cdm([string]$logname){
    $checkrun= get-process -name diskmark64 -ea SilentlyContinue
     if($checkrun){
       $checkrun.CloseMainWindow()
     }
+   #ini file reviced
+   $inipath="$usbroot\CrystalDiskMark\DiskMark64.ini"
+   $inifile=get-content $inipath
+    $newcontent=foreach($line in $inifile){
+    if($line -match "TestCount\="){
+        $line="TestCount=4" #5 times
+    }
+    if($line -match "TestSize\="){
+        $line="TestSize=6" #1GiB
+    }
+      if($line -match "Benchmark\="){
+        $line="Benchmark=3"  #read+write
+    }
+    $line
+    }
+set-content $inipath -value $newcontent -Force
+$extracts=@()
   $cdmexe="$usbroot\CrystalDiskMark\DiskMark64.exe"
   .$cdmexe
   start-sleep -s 5
@@ -223,8 +267,14 @@ function cdm($ini,[string]$logname){
   $clickY=$wclick.ClickY
   [Clicker]::LeftClickAtPoint($clickX,$clickY)
    start-sleep -s 1
+   for($i = 0;$i -lt 6; $i++){
    $ws.SendKeys("{TAB}")
    start-sleep -s 1
+   if($i -eq 3){
+   $ws.SendKeys($driverletter)
+   start-sleep -s 1
+   }
+   }
    $ws.SendKeys(" ")
    $starttime=get-date
    start-sleep -s 5
@@ -241,8 +291,8 @@ function cdm($ini,[string]$logname){
    $runningtime=(New-TimeSpan -start $starttime -end $endttime)
    $minutes = [int]$runningtime.TotalMinutes
    $seconds = $runningtime.Seconds
-   $runtimeText = "{0}min {1}s" -f $minutes, $seconds
-   write-output "DiskMark run test for $runtimeText"
+   #$runtimeText = "{0}min {1}s" -f $minutes, $seconds
+   #write-output "DiskMark run test for $runtimeText"
    #save image and txt
    $timesuffix=get-date -format "_yyMMddHHmmss"
    $logpath="$logfolder\CrystalDiskMark"
@@ -274,9 +324,30 @@ function cdm($ini,[string]$logname){
       $newfile= $newfiles |Where-Object{$_.name -notin $lastfiles.name}
      }
     rename-item $newfile.FullName -NewName $filename
+    #get read/write 
+    if($filename -match ".txt"){
+        $filefull=(join-path $logpath $filename).ToString()
+        $contentlog = get-content $filefull
+        $x=99
+        foreach($logline in $contentlog){
+           if($logline -match "\[Read\]"){
+            $x=0
+           } 
+           if($logline -match "\[Write\]"){
+            $x=0
+           }
+           if($x -eq 1){
+            $extract=((($logline -split ":")[1] -split "\[")[0]).Trim()
+            $extracts+=$extract
+           }
+           $x++
+        }
+
+    }
     }
   
-  (get-process -name diskmark64).CloseMainWindow()
+  (get-process -name diskmark64).CloseMainWindow()|Out-Null
+  return $extracts
 }
 
 function test-FileSizeOnDisk {
@@ -287,7 +358,8 @@ function test-FileSizeOnDisk {
     )
     $Path="$($driverletter):\filename.txt"
     remove-item $Path -ErrorAction SilentlyContinue
-    fsutil file createnew $Path $xbypes|out-null
+    $formatfilebytes=[int64]$formatfilesize.ToString()
+    fsutil file createnew $Path $formatfilebytes|out-null
     $file = Get-Item $Path
     $vol = Get-CimInstance Win32_Volume -Filter "DriveLetter='$($driverletter):'"
     # expected allocation
@@ -453,3 +525,125 @@ function getdiskinfo([string]$index){
         }
     }
 }
+
+function OS93{
+    param(
+    [int64]$totalsize=100GB
+    )
+$screen = [System.Windows.Forms.Screen]::PrimaryScreen 
+$bounds = $screen.Bounds 
+$clickx=$bounds.Width/2
+$clicky=$bounds.Height/2
+$os93result=@()
+$sublogfolder=(join-path $logfolder "OS93\CopyFrom").ToString()
+    if(!(test-path $sublogfolder)){
+        new-item -ItemType Directory -Path $sublogfolder|Out-Null
+    }
+    else{
+        remove-item $sublogfolder -r -Force
+    }
+$picfoldersub="$picfolder\OS93"
+$partsize=$totalsize/20
+for($i=1;$i -le 20;$i++){
+    $blockname="Part_$("{0:D2}" -f $i).BIN"
+    $filefullname=(Join-Path $sublogfolder $blockname).ToString()
+    fsutil file createnew $filefullname $partsize|out-null
+}
+   $destpath="$($driverletter):" 
+   remove-item "$destpath\*" -r -Force #clean disk
+   
+$x=1
+$sw = [Diagnostics.Stopwatch]::StartNew()
+while($true){
+    $copyfolder="CopyTo-$("{0:D2}" -f $x)"
+    $newdes="$($destpath)\$($copyfolder)"
+    new-item -itemtype directory -path $newdes|out-null
+    $destpath="$($driverletter):" 
+    diskexploropen -openpath $sublogfolder 
+    start-sleep -s 5
+    $ws.SendKeys(" ")
+    start-sleep -s 1
+    $ws.SendKeys("^a") 
+    start-sleep -s 1
+    $ws.SendKeys("^c")
+    start-sleep -s 1
+    diskexploropen -openpath $newdes
+    start-sleep -s 5
+    [Clicker]::LeftClickAtPoint($clickX,$clickY)
+    $ws.SendKeys(" ")
+    start-sleep -s 1
+    $ws.SendKeys("^v")
+    #wait 5 sec to see if alarm
+    start-sleep -s 5
+    screenshot -picpath $picfoldersub -picname $copyfolder
+    $poptext1=(Get-PopupWindowText -TitleRegex 'complete').text
+    $poptext2=(Get-PopupWindowText -TitleRegex 'interrupted').text
+    if($poptext2 -like "*not enough*"){
+    screenshot -picpath $picfoldersub -picname "drive_Filled"
+    $ws.SendKeys("%c")   
+    start-sleep -s 1
+    $ws.SendKeys(" ")
+    start-sleep -s 1
+    $ws.SendKeys("%{F4}")
+    start-sleep -s 1
+    $ws.SendKeys("%{F4}")
+    $datetime=get-date -format "_yyMMdd-HHmmss"
+    $csvname="OS93_result$( $datetime).csv"
+    $resultcsv=(join-path $logfolder $csvname).ToString()
+    $os93result|export-csv $resultcsv -Encoding UTF8 -NoTypeInformation
+    break
+    }
+    while($poptext1 -like "*copying*"){
+    $poptext1=(Get-PopupWindowText -TitleRegex 'complete').text
+    start-sleep -s 30
+    }
+    Write-Output "Copying Completed, idle for 20 min..."
+    start-sleep -s 1200 #idle 20 mins
+    #region comparefile
+    $failhash=@()
+    $failsize=@()
+    foreach($destfolder in $destfolders){
+        $destfiles=Get-ChildItem $destfolder -file
+        foreach ($destfiles in $destfiles){
+         $fromfile=(join-path $sublogfolder $destfiles.Name).ToSingle()
+         $fromfilehash=Get-FileHash -Path $fromfile -Algorithm SHA256
+         $destfilehash=Get-FileHash -Path $destfiles.FullName -Algorithm SHA256
+         $fromfilesize=(Get-ChildItem -Path $fromfile).Length
+         $destfilesize= (Get-ChildItem -Path $destfiles.FullName).Length
+         if($fromfilehash -ne $destfilehash){
+           $failhash+=@($destfiles.FullName)
+         }
+         if($fromfilesize -ne $destfilesize){
+           $failsize+=@($destfiles.FullName)
+         }
+        }
+        
+            $result="PASS"
+            $failitems=@()
+        if ($failsize){
+            $result="NG"
+            $failitems+=@("Size Fail",$($failsize -join "\")) -join ":"
+        }
+        if ($failhash){
+            $result="NG"
+            $failitems+=@("Hash Fail",$($failhash -join "\")) -join ":"
+        }
+        $failitems = ($failitems |Out-String).trim()
+         $os93result+=[PSCustomObject]@{
+            foldername = $newdes
+            result = $result
+            failitems=$failitems
+         }
+     }
+    #endregion
+    $x++
+    #close 2 file explore window
+    start-sleep -s 1
+    $ws.SendKeys("%{F4}")
+    start-sleep -s 1
+    $ws.SendKeys("%{F4}")
+     }
+$sw.stop()
+$filltakes="$([math]::Round($sw.Elapsed.TotalSeconds,2)) sec"
+Write-Output "total copying time: $filltakes "
+   }

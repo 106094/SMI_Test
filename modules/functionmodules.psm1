@@ -1,5 +1,17 @@
 
 $psroot="$modulepath\clicktool"
+
+function get_driverletter{
+    $driverletter=(Get-WmiObject Win32_Volume -Filter ("DriveType={0}" -f [int][System.IO.DriveType]::Removable)).DriveLetter 
+    if(!$driverletter){
+      $readhost=Read-Host "No USB disk found, please insert one USB fresh drive to test"
+    }
+    if($driverletter.count -gt 1){
+      $readhost=Read-Host "No USB fresh drive is found, please insert one USB fresh drive to test"
+      $ws.Popup("Please left Only One USB fresh drive for test!", 0, "System Alert", 48 + 0)
+    }
+    return $driverletter
+}
 function installjava([int32]$ver,[switch]$testing){
 
     $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
@@ -51,6 +63,98 @@ function downloadsikuli{
        else{
         Write-Output "sikuli already downloaded"
        }
+}
+
+
+$source = @"
+using System;
+using System.Threading.Tasks;
+using System.Runtime.InteropServices;
+using System.Windows.Forms;
+namespace KeySends
+{
+    public class KeySend
+    {
+        [DllImport("user32.dll")]
+        public static extern void keybd_event(byte bVk, byte bScan, int dwFlags, int dwExtraInfo);
+        private const int KEYEVENTF_EXTENDEDKEY = 1;
+        private const int KEYEVENTF_KEYUP = 2;
+        public static void KeyDown(Keys vKey)
+        {
+            keybd_event((byte)vKey, 0, KEYEVENTF_EXTENDEDKEY, 0);
+        }
+        public static void KeyUp(Keys vKey)
+        {
+            keybd_event((byte)vKey, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0);
+        }
+    }
+}
+"@
+Add-Type -TypeDefinition $source -ReferencedAssemblies "System.Windows.Forms"
+
+ function Set-WindowState {
+	<#
+	.LINK
+	https://gist.github.com/Nora-Ballard/11240204
+	#>
+
+	[CmdletBinding(DefaultParameterSetName = 'InputObject')]
+	param(
+		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
+		[Object[]] $InputObject,
+
+		[Parameter(Position = 1)]
+		[ValidateSet('FORCEMINIMIZE', 'HIDE', 'MAXIMIZE', 'MINIMIZE', 'RESTORE',
+					 'SHOW', 'SHOWDEFAULT', 'SHOWMAXIMIZED', 'SHOWMINIMIZED',
+					 'SHOWMINNOACTIVE', 'SHOWNA', 'SHOWNOACTIVATE', 'SHOWNORMAL')]
+		[string] $State = 'SHOW'
+	)
+
+	Begin {
+		$WindowStates = @{
+			'FORCEMINIMIZE'		= 11
+			'HIDE'				= 0
+			'MAXIMIZE'			= 3
+			'MINIMIZE'			= 6
+			'RESTORE'			= 9
+			'SHOW'				= 5
+			'SHOWDEFAULT'		= 10
+			'SHOWMAXIMIZED'		= 3
+			'SHOWMINIMIZED'		= 2
+			'SHOWMINNOACTIVE'	= 7
+			'SHOWNA'			= 8
+			'SHOWNOACTIVATE'	= 4
+			'SHOWNORMAL'		= 1
+		}
+
+		$Win32ShowWindowAsync = Add-Type -MemberDefinition @'
+[DllImport("user32.dll")]
+public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
+'@ -Name "Win32ShowWindowAsync" -Namespace Win32Functions -PassThru
+
+		if (!$global:MainWindowHandles) {
+			$global:MainWindowHandles = @{ }
+		}
+	}
+
+	Process {
+		foreach ($process in $InputObject) {
+			if ($process.MainWindowHandle -eq 0) {
+				if ($global:MainWindowHandles.ContainsKey($process.Id)) {
+					$handle = $global:MainWindowHandles[$process.Id]
+				} else {
+					Write-Error "Main Window handle is '0'"
+					continue
+				}
+			} else {
+				$handle = $process.MainWindowHandle
+				$global:MainWindowHandles[$process.Id] = $handle
+			}
+
+			$Win32ShowWindowAsync::ShowWindowAsync($handle, $WindowStates[$State]) | Out-Null
+			Write-Verbose ("Set Window State '{1} on '{0}'" -f $MainWindowHandle, $State)
+		}
+	}
 }
 
 function click([string]$imagef,[string]$foldername){
@@ -258,98 +362,6 @@ public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
 	}
 }
 #[Clicker]::LeftClickAtPoint($x1, $y1)
-function screenshot([string]$picpath,[string]$picname){
-
-  $source = @"
-using System;
-using System.Threading.Tasks;
-using System.Runtime.InteropServices;
-using System.Windows.Forms;
-namespace KeySends
-{
-    public class KeySend
-    {
-        [DllImport("user32.dll")]
-        public static extern void keybd_event(byte bVk, byte bScan, int dwFlags, int dwExtraInfo);
-        private const int KEYEVENTF_EXTENDEDKEY = 1;
-        private const int KEYEVENTF_KEYUP = 2;
-        public static void KeyDown(Keys vKey)
-        {
-            keybd_event((byte)vKey, 0, KEYEVENTF_EXTENDEDKEY, 0);
-        }
-        public static void KeyUp(Keys vKey)
-        {
-            keybd_event((byte)vKey, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0);
-        }
-    }
-}
-"@
-Add-Type -TypeDefinition $source -ReferencedAssemblies "System.Windows.Forms"
-
- function Set-WindowState {
-	<#
-	.LINK
-	https://gist.github.com/Nora-Ballard/11240204
-	#>
-
-	[CmdletBinding(DefaultParameterSetName = 'InputObject')]
-	param(
-		[Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
-		[Object[]] $InputObject,
-
-		[Parameter(Position = 1)]
-		[ValidateSet('FORCEMINIMIZE', 'HIDE', 'MAXIMIZE', 'MINIMIZE', 'RESTORE',
-					 'SHOW', 'SHOWDEFAULT', 'SHOWMAXIMIZED', 'SHOWMINIMIZED',
-					 'SHOWMINNOACTIVE', 'SHOWNA', 'SHOWNOACTIVATE', 'SHOWNORMAL')]
-		[string] $State = 'SHOW'
-	)
-
-	Begin {
-		$WindowStates = @{
-			'FORCEMINIMIZE'		= 11
-			'HIDE'				= 0
-			'MAXIMIZE'			= 3
-			'MINIMIZE'			= 6
-			'RESTORE'			= 9
-			'SHOW'				= 5
-			'SHOWDEFAULT'		= 10
-			'SHOWMAXIMIZED'		= 3
-			'SHOWMINIMIZED'		= 2
-			'SHOWMINNOACTIVE'	= 7
-			'SHOWNA'			= 8
-			'SHOWNOACTIVATE'	= 4
-			'SHOWNORMAL'		= 1
-		}
-
-		$Win32ShowWindowAsync = Add-Type -MemberDefinition @'
-[DllImport("user32.dll")]
-public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
-'@ -Name "Win32ShowWindowAsync" -Namespace Win32Functions -PassThru
-
-		if (!$global:MainWindowHandles) {
-			$global:MainWindowHandles = @{ }
-		}
-	}
-
-	Process {
-		foreach ($process in $InputObject) {
-			if ($process.MainWindowHandle -eq 0) {
-				if ($global:MainWindowHandles.ContainsKey($process.Id)) {
-					$handle = $global:MainWindowHandles[$process.Id]
-				} else {
-					Write-Error "Main Window handle is '0'"
-					continue
-				}
-			} else {
-				$handle = $process.MainWindowHandle
-				$global:MainWindowHandles[$process.Id] = $handle
-			}
-
-			$Win32ShowWindowAsync::ShowWindowAsync($handle, $WindowStates[$State]) | Out-Null
-			Write-Verbose ("Set Window State '{1} on '{0}'" -f $MainWindowHandle, $State)
-		}
-	}
-}
 
 ### minimized cmd window ###
 function minimized {
@@ -366,44 +378,43 @@ function minimized {
     }
     
 }
-
-
+function screenshot([string]$picpath,[string]$picname){
 Add-Type @"
 using System;
 using System.Runtime.InteropServices;
-public class PInvoke {
-    [DllImport("user32.dll")] public static extern IntPtr GetDC(IntPtr hwnd);
-    [DllImport("gdi32.dll")] public static extern int GetDeviceCaps(IntPtr hdc, int nIndex);
+public class Native {
+  [DllImport("user32.dll")] public static extern IntPtr GetDC(IntPtr hwnd);
+  [DllImport("user32.dll")] public static extern int ReleaseDC(IntPtr hwnd, IntPtr hdc);
+  [DllImport("gdi32.dll")] public static extern int GetDeviceCaps(IntPtr hdc, int nIndex);
 }
 "@
-$hdc = [PInvoke]::GetDC([IntPtr]::Zero)
-$curwidth = [PInvoke]::GetDeviceCaps($hdc, 118) # width
-$curheight = [PInvoke]::GetDeviceCaps($hdc, 117) # height
-
-$script:screen = [System.Windows.Forms.Screen]::PrimaryScreen
-$bounds = $screen.Bounds
-
-$currentDPI = (Get-ItemProperty -Path "HKCU:\Control Panel\Desktop\WindowMetrics" -Name AppliedDPI).AppliedDPI
-
-$dpisets=@(96,120,144,168)
-$sclsets=@(100,125,150,175)
-
-$index = $dpisets.IndexOf($currentDPI)
-$calcu = $sclsets[$index] /100
-
-$bounds.Width = $curwidth * $calcu
-$bounds.Height = $curheight * $calcu
-
-$bmp = New-Object System.Drawing.Bitmap($curwidth, $curheight)
-$graphics = [System.Drawing.Graphics]::FromImage($bmp)
-$graphics.CopyFromScreen($bounds.X, $bounds.Y, 0, 0, $bounds.Size)
-$datesuffix=get-date -Format "-yyMMdd_HHmmss"
-$picname=$picname+$datesuffix+".jpg"
-$picfullname=join-path $picpath $picname
-$bmp.Save($picfullname)
-Start-Sleep -s 2
-$graphics.Dispose()
-$bmp.Dispose()
+ $hdc = [Native]::GetDC([IntPtr]::Zero)
+  try {
+    # 118/117 = DESKTOPHORZRES / DESKTOPVERTRES (real pixel resolution)
+    $pxW = [Native]::GetDeviceCaps($hdc, 118) # width
+    $pxH = [Native]::GetDeviceCaps($hdc, 117) # height
+  }
+  finally {
+    [void][Native]::ReleaseDC([IntPtr]::Zero, $hdc)
+  }
+ $bmp = New-Object System.Drawing.Bitmap($pxW, $pxH)
+ $g   = [System.Drawing.Graphics]::FromImage($bmp)
+ try {
+    $g.CopyFromScreen(0, 0, 0, 0, $bmp.Size)
+    $datesuffix = Get-Date -Format "-yyMMdd_HHmmss"
+    $safeName = ($picname -replace '[\\/:*?"<>|]', '_')
+    $full = Join-Path $picpath ($safeName + $datesuffix + ".jpg")
+    $picsavepath=split-path $full
+        if(!(test-path $picsavepath)){
+        new-item -ItemType Directory -Path $picsavepath|Out-Null
+    }
+    $bmp.Save($full, [System.Drawing.Imaging.ImageFormat]::Jpeg)
+  }
+  finally {
+    $g.Dispose()
+    $bmp.Dispose()
+  }
+  
 }
 
 function Get-AppWindowRect {
@@ -478,9 +489,34 @@ public static class Win32User32 {
     $width = ($rect.Right - $rect.Left)
     $height = ($rect.Bottom - $rect.Top)
     if($shiftpercentage){
-        $ClickShiftX=$ClickShiftX/100*$width        
-        $ClickShiftY=$ClickShiftY/100*$height
+        $ClickShiftX=$width/100*$ClickShiftX
+        $ClickShiftY=$height/100*$ClickShiftY
     }
+    
+
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public class PInvoke {
+    [DllImport("user32.dll")] public static extern IntPtr GetDC(IntPtr hwnd);
+    [DllImport("gdi32.dll")] public static extern int GetDeviceCaps(IntPtr hdc, int nIndex);
+}
+"@
+    $hdc = [PInvoke]::GetDC([IntPtr]::Zero)
+    $curwidth = [PInvoke]::GetDeviceCaps($hdc, 118) # width
+    $curheight = [PInvoke]::GetDeviceCaps($hdc, 117) # height
+
+    $script:screen = [System.Windows.Forms.Screen]::PrimaryScreen
+    $bounds = $screen.Bounds
+
+    $currentDPI = (Get-ItemProperty -Path "HKCU:\Control Panel\Desktop\WindowMetrics" -Name AppliedDPI).AppliedDPI
+
+    $dpisets=@(96,120,144,168)
+    $sclsets=@(100,125,150,175)
+
+    $index = $dpisets.IndexOf($currentDPI)
+    $calcu = $sclsets[$index] /100
+
     [PSCustomObject]@{
         ProcessName = $p.ProcessName
         Id          = $p.Id
@@ -492,8 +528,8 @@ public static class Win32User32 {
         Bottom      = $rect.Bottom
         Width       = $width
         Height      = $height
-        ClickX      = ($rect.Left + $ClickShiftX )
-        ClickY      = ($rect.Top  + $ClickShiftY)
+        ClickX      = ($rect.Left + $ClickShiftX)/$calcu
+        ClickY      = ($rect.Top  + $ClickShiftY)/$calcu
     }
 }
 
@@ -525,7 +561,7 @@ function Get-PopupWindowText {
                 ))
             )
 
-            return [PSCustomObject]@{
+            return  [PSCustomObject]@{
                 Title = $name
                 Text  = ($texts | ForEach-Object { $_.Current.Name }) -join "`n"
             }
@@ -538,3 +574,15 @@ $filenname="$($filename)$($datetime).csv"
 $outfilenname=(join-path $logfolder $filenname).ToString()
 return $outfilenname
 }
+
+<#
+$script:screen = [System.Windows.Forms.Screen]::PrimaryScreen 
+$bounds = $screen.Bounds 
+$currentDPI = (Get-ItemProperty -Path "HKCU:\Control Panel\Desktop\WindowMetrics" -Name AppliedDPI).AppliedDPI 
+$dpisets=@(96,120,144,168) 
+$sclsets=@(100,125,150,175) 
+$index = $dpisets.IndexOf($currentDPI) 
+$calcu = $sclsets[$index] /100 
+$bounds.Width = $curwidth * $calcu 
+$bounds.Height = $curheight * $calcu
+#>
