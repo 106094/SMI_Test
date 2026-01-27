@@ -530,10 +530,6 @@ function OS93{
     param(
     [int64]$totalsize=100GB
     )
-$screen = [System.Windows.Forms.Screen]::PrimaryScreen 
-$bounds = $screen.Bounds 
-$clickx=$bounds.Width/2
-$clicky=$bounds.Height/2
 $os93result=@()
 $sublogfolder=(join-path $logfolder "OS93\CopyFrom").ToString()
     if(!(test-path $sublogfolder)){
@@ -569,7 +565,6 @@ while($true){
     start-sleep -s 1
     diskexploropen -openpath $newdes
     start-sleep -s 5
-    [Clicker]::LeftClickAtPoint($clickX,$clickY)
     $ws.SendKeys(" ")
     start-sleep -s 1
     $ws.SendKeys("^v")
