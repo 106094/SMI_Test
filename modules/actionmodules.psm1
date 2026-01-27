@@ -296,6 +296,9 @@ $extracts=@()
    #save image and txt
    $timesuffix=get-date -format "_yyMMddHHmmss"
    $logpath="$logfolder\CrystalDiskMark"
+   if(!(test-path $logpath)){
+    new-item -ItemType Directory -Path $logpath|Out-Null
+   }
     @(".txt", ".png")|ForEach-Object{
     $extension=$_
     $filename="$($logname)$($timesuffix)$($extension)"
