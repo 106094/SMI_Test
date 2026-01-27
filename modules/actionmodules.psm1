@@ -36,7 +36,7 @@ function diskexploreaction{
 #from disk property to check file system type (e.g. FAT32, NTFS, exFAT)
 if($type -eq "property"){
 diskexploropen -openpath "shell:MyComputerFolder"
-for($i=0;$i -lt 4;$i++){
+for($i=0;$i -lt 20;$i++){
 $ws.SendKeys("{Right}")  #select to right most (Disk)
 start-sleep -Milliseconds 200
 }
@@ -72,7 +72,7 @@ $alllocatesizes=@(13,4,15)
 $run=0
 
 diskexploropen -openpath "shell:MyComputerFolder"
-for($i=0;$i -lt 4;$i++){
+for($i=0;$i -lt 20;$i++){
 $ws.SendKeys("{Right}")  #select to right most (Disk)
 start-sleep -Milliseconds 200
 }
