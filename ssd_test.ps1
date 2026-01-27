@@ -39,17 +39,19 @@ $clustercheck=test_diskClusterSize -DeviceType "FLASH" -index "OS06-D" #OS06-D
 diskexploreaction -type "format" -index "OS20Scen1_clean" #OS20 format
 diskexploreaction -type "format" -formatfile -formatfilesize 5GB -index "OS20Scen1_file" #OS20 with 5GB file copied before format
 
-diskexploreaction -type "format" -index "OS21Scen1_clean" -nonquick #OS20 format
-diskexploreaction -type "format" -formatfile -formatfilesize 5GB -index "OS21scen1_file" -nonquick #OS20 with 5GB file copied before format
+diskexploreaction -type "format" -index "OS21Scen1_clean" -nonquick #OS20 full format
+diskexploreaction -type "format" -formatfile -formatfilesize 5GB -index "OS21scen1_file" -nonquick #OS20 with 5GB file copied before full format
 
 $csvlog=csvlogname -filename "OS20_formatMatrix"
 $global:formatresults|export-csv -Path $csvlog -Encoding UTF8 -NoTypeInformation
+
+OS93
+#skip test
+<#
 #get text info
 $filesystem=(Get-Volume -DriveLetter $driverletter).FileSystem #OS03-C
 $diskNumber = (Get-Partition -DriveLetter $driverletter).DiskNumber
 $PartitionStyle=(Get-Disk -Number $diskNumber).PartitionStyle #OS03-E
-#skip test
-<#
 $foldername="OS20"
 $clicknames="b"
 foreach($clickname in $clicknames){
