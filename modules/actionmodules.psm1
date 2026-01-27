@@ -108,7 +108,7 @@ for ($i=1;$i -le $alllocatedown;$i++){
     $copytakes = "{0}min {1}s" -f $minutes, $seconds
     }
 #cdm test before formating
-$cdm_before=cdm -logname "$($index)_$($systemtype)_$($i)_before"
+$cdm_before=cdm -logname "$($index)_$($systemtype)_$($allocateunit)_CDMTestbefore"
 $ws.SendKeys("{F5}")
 start-sleep -s 2
 $ws.SendKeys("+{F10}")
@@ -140,7 +140,7 @@ start-sleep -s 1
 $ws.SendKeys(" ")
 start-sleep -s 1
 }
-screenshot -picpath $picfolder -picname "$($index)_$($sysdown)_$($i)_settings"
+screenshot -picpath $picfolder -picname "$($index)_$($systemtype)_$($allocateunit)_settings"
 #start
 $ws.SendKeys("%s")
 #check warning
@@ -159,11 +159,11 @@ start-sleep -Milliseconds 100
 }
 $endttime=get-date
 Start-Sleep -s 1
-screenshot -picpath $picfolder -picname "$($index)_$($sysdown)_$($i)_Complete"
+screenshot -picpath $picfolder -picname "$($index)_$($systemtype)_$($allocateunit)_Complete"
 $ws.SendKeys(" ") #close format window
 start-sleep -s 1
 #cdm test before formating
-$cdm_after=cdm -logname "$($index)_$($sysdown)_$($i)_after"
+$cdm_after=cdm -logname "$($index)_$($systemtype)_$($allocateunit)_CDMTest_after"
 
    $runningtime=(New-TimeSpan -start $starttime -end $endttime)
    $minutes = [int]($runningtime.TotalMinutes)
