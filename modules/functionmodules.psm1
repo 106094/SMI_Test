@@ -582,3 +582,34 @@ $calcu = $sclsets[$index] /100
 $bounds.Width = $curwidth * $calcu 
 $bounds.Height = $curheight * $calcu
 #>
+# Run as Administrator
+
+function getsupportformat{
+$drive = $driverletter
+
+$fileSystems = @('NTFS', 'exFAT', 'FAT32')   # ReFS usually not available on client Windows
+
+$results = @()
+
+foreach ($fs in $fileSystems) {
+    try {
+        $clusters = Get-SupportedClusterSizes -DriveLetter $drive -FileSystem $fs -ErrorAction Stop
+        
+        foreach ($size in $clusters) {
+            $results += [PSCustomObject]@{
+                FileSystem         = $fs
+                AllocationUnitSize = $size   # already in bytes
+                AllocationUnitSizeKB = "{0:0}KB" -f ($size / 1KB)
+            }
+        }
+    }
+    catch {
+        Write-Warning "File system $fs not supported or query failed on drive $drive : $_"
+    }
+}
+
+return $results
+
+# Optional: Export to CSV
+# $results | Export-Csv -Path "C:\Temp\FormatOptions_$drive.csv" -NoTypeInformation -Encoding UTF8
+}

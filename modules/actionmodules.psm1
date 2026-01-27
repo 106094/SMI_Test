@@ -67,11 +67,18 @@ if($formatfile){
     Format-Volume -DriveLetter "$($driverletter)" -FileSystem exFAT -AllocationUnitSize 16384 -Force
 }
 #decide which file sys/alllocate to run
-$systypes=@(1,2,3)
-$alllocatesizes=@(13,4,15)
-$run=0
-
+$systypes=@()
+$alllocatesizes=@()
+$formatcomb=getsupportformat
+$filesystems=$formatcomb."FileSystem"|Get-Unique| Sort-Object -Descending
+foreach($filesystem in $filesystems){
+    $indexa=$filesystems.indexof($filesystem)+1
+    $systypes+=@($indexa)
+    $indexb=($formatcomb|where-Object{$_."FileSystem" -eq $filesystem}).count
+    $alllocatesizes+=@($indexb)
+}
 diskexploropen -openpath "shell:MyComputerFolder"
+$run=0
 for($i=0;$i -lt 20;$i++){
 $ws.SendKeys("{Right}")  #select to right most (Disk)
 start-sleep -Milliseconds 200
@@ -79,8 +86,13 @@ start-sleep -Milliseconds 200
 foreach($sys in $systypes){
 $sysdown=$systypes[$run]
 $alllocatedown=$alllocatesizes[$run]
+$systemtype=$filesystems[$run]
 for ($i=1;$i -le $alllocatedown;$i++){
-   write-output "filesystem:$($sysdown), alllocation unit size:$($i)"
+ $allocateunit=((($formatcomb|Where-Object{$_."FileSystem" -eq $systemtype}).AllocationUnitSize)[$i-1])
+ if([int64]$allocateunit -gt 15KB){
+ $allocateunit=((($formatcomb|Where-Object{$_."FileSystem" -eq $systemtype}).AllocationUnitSizeKB)[$i-1])
+ }
+   write-output "filesystem:$($systemtype), alllocation unit size:$($allocateunit)"
    if($formatfile){
    if(!(test-path $filefull)){
     fsutil file createnew $filefull $formatfilebytes|Out-Null
@@ -96,7 +108,7 @@ for ($i=1;$i -le $alllocatedown;$i++){
     $copytakes = "{0}min {1}s" -f $minutes, $seconds
     }
 #cdm test before formating
-$cdm_before=cdm -logname "$($index)_$($sysdown)_$($i)_before"
+$cdm_before=cdm -logname "$($index)_$($systemtype)_$($i)_before"
 $ws.SendKeys("{F5}")
 start-sleep -s 2
 $ws.SendKeys("+{F10}")
