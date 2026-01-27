@@ -25,7 +25,7 @@ if(!$rootpath -or $rootpath -like "*system32*"){
     $rootpath="$env:userprofile\Desktop\Main\SMI_Test"
 }
 $global:formatresults=@()
-$modulepath="$rootpath\modules"
+$modulepath= (join-path $rootpath "modules").tostring()
 Import-Module $modulepath\functionmodules.psm1 -force
 Import-Module $modulepath\actionmodules.psm1 -force
 if (!(test-path $modulepath\usbtool)){
@@ -36,8 +36,8 @@ if(!$diskpath){
     exit
 }
 $driverletter=$($diskpath).replace(":","")
-$logfolder="$rootpath\logs"
-$picfolder = "$logfolder\screenshots"
+$logfolder = (join-path $rootpath "logs").tostring()
+$picfolder = (join-path $logfolder "screenshots").tostring()
 if(!(test-path $picfolder)){
 new-item -itemtype directory $picfolder |Out-Null
 }
