@@ -21,7 +21,9 @@ $global:formatresults=@()
 $modulepath="$rootpath\modules"
 Import-Module $modulepath\functionmodules.psm1 -force
 Import-Module $modulepath\actionmodules.psm1 -force
-
+if (!(test-path $modulepath\usbtool)){
+Expand-Archive -Path $modulepath\usbtool.zip -DestinationPath $modulepath\usbtool
+}
 $driverletter=$(get_driverletter).replace(":","")
 $logfolder="$rootpath\logs"
 $picfolder = "$logfolder\screenshots"
