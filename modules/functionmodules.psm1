@@ -3,8 +3,8 @@ $psroot="$modulepath\clicktool"
 
 function get_driverletter{
     $driverletter=(Get-WmiObject Win32_Volume -Filter ("DriveType={0}" -f [int][System.IO.DriveType]::Removable)).DriveLetter
-   if(!$driverletter){
-    $driverletter=(Get-WmiObject Win32_Volume -Filter ("DriveType={0}" -f [int][System.IO.DriveType]::Fixed)).DriveLetter -notmatch "C"
+     if(!$driverletter){
+    $driverletter=(Get-WmiObject Win32_Volume -Filter ("DriveType={0}" -f [int][System.IO.DriveType]::Fixed)).DriveLetter |where-Object{$_.length -gt 0 -and $_ -notmatch "C"}
     } 
     if(!$driverletter){
       $ws.Popup("No USB disk found, please insert one USB fresh drive to test", 0, "System Alert", 48 + 0)|Out-Null
