@@ -2,7 +2,7 @@
 $psroot="$modulepath\clicktool"
 
 function get_driverletter{
-    $driverletter=(Get-WmiObject Win32_Volume -Filter ("DriveType={0}" -f [int][System.IO.DriveType]::Removable)).DriveLetter
+    $driverletter=(Get-WmiObject Win32_Volume -Filter ("DriveType={0}" -f [int][System.IO.DriveType]::Removable)).DriveLetter 
      if(!$driverletter){
     $driverletter=(Get-WmiObject Win32_Volume -Filter ("DriveType={0}" -f [int][System.IO.DriveType]::Fixed)).DriveLetter |where-Object{$_.length -gt 0 -and $_ -notmatch "C"}
     } 
@@ -524,8 +524,8 @@ public class PInvoke {
         Bottom      = $rect.Bottom
         Width       = $width
         Height      = $height
-        ClickX      = ($rect.Left + $ClickShiftX)/$calcu
-        ClickY      = ($rect.Top  + $ClickShiftY)/$calcu
+        ClickX      = ($rect.Left + $ClickShiftX)
+        ClickY      = ($rect.Top  + $ClickShiftY)
     }
 }
 
