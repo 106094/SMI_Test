@@ -4,10 +4,12 @@ $psroot="$modulepath\clicktool"
 function get_driverletter{
     $driverletter=(Get-WmiObject Win32_Volume -Filter ("DriveType={0}" -f [int][System.IO.DriveType]::Removable)).DriveLetter 
     if(!$driverletter){
-      $ws.Popup("No USB disk found, please insert one USB fresh drive to test", 0, "System Alert", 48 + 0)
+      $ws.Popup("No USB disk found, please insert one USB fresh drive to test", 0, "System Alert", 48 + 0)|Out-Null
+      return
     }
     if($driverletter.count -gt 1){
-      $ws.Popup("Please left Only One USB fresh drive for test!", 0, "System Alert", 48 + 0)
+      $ws.Popup("Please left Only One USB fresh drive for test!", 0, "System Alert", 48 + 0)|Out-Null
+      return
     }
     return $driverletter
 }
