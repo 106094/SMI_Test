@@ -210,14 +210,6 @@ function capture ([string]$foldername){
     remove-item $capturef -Force
 }
 
-$checkjava= java --version
-
-if(!$checkjava){
-installjava 23
-downloadsikuli
-}
-
-
 $cSource = @'
 using System;
 using System.Drawing;

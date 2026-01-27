@@ -4,7 +4,14 @@
   Add-Type -AssemblyName UIAutomationTypes
   $shell=New-Object -ComObject shell.application
   $ws=New-Object -ComObject wscript.shell
-       
+<#    
+$checkjava= java --version
+if(!$checkjava){
+installjava 23
+downloadsikuli
+}
+#>
+
 $screen = [System.Windows.Forms.Screen]::PrimaryScreen
 $bounds = $screen.Bounds
 $screenheight=$bounds.Bottom
