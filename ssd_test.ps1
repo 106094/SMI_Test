@@ -41,7 +41,6 @@ $picfolder = (join-path $logfolder "screenshots").tostring()
 if(!(test-path $picfolder)){
 new-item -itemtype directory $picfolder |Out-Null
 }
-
 #skip test
 <#
 diskexploreaction -type "property" -picname "OS03-B"

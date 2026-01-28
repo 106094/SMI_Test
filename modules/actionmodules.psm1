@@ -50,6 +50,16 @@ start-sleep -s 1
 $ws.SendKeys("%{F4}")
 }
 if($type -eq "format"){
+    $timesuffix=get-date -format "_yyMMdd-HHmmss"
+   $logfilename= "$($index)$($timesuffix).log"
+ $logpath= (join-path $logfolder $logfilename=).ToString()
+
+ $os=testos  
+ if($os -like "*11*"){
+   $messageline="Windows 11, skip from file explore format"
+    outlog -message $messageline -logpath  $logpath
+  return $messageline
+ }
 $copytakes="-"
 if($formatfile){
     Write-Output "format with file"
@@ -714,3 +724,15 @@ outlog -message "total copying time: $($filltakes)" -logpath $os93log
     }
     add-content $logpath -Value $logmessage -Force
   }
+
+function testos{
+$version = [System.Environment]::OSVersion.Version
+$versionString = $version.ToString()
+$build = $version.Build
+
+if ($build -ge 22000) {
+   return "Win11"
+} else {
+   return "Win10"
+}
+}
