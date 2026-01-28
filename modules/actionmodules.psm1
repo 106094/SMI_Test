@@ -34,6 +34,7 @@ function diskexploreaction{
     [string]$index
   )
 #from disk property to check file system type (e.g. FAT32, NTFS, exFAT)
+$picfolder=(join-path $picfolder $index).tostring()
 if($type -eq "property"){
 diskexploropen -openpath "shell:MyComputerFolder"
 for($i=0;$i -lt 20;$i++){
