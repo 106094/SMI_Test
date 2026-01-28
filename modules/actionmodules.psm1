@@ -109,6 +109,7 @@ for ($i=1;$i -le $alllocatedown;$i++){
     }
 #cdm test before formating
 $cdm_before=cdm -logname "$($index)_$($systemtype)_$($allocateunit)_CDMTestbefore"
+$freebefore = "{0:N2}" -f $((Get-PSDrive -Name $driverletter).Free)
 $ws.SendKeys("{F5}")
 start-sleep -s 2
 $ws.SendKeys("+{F10}")
@@ -134,7 +135,7 @@ for ($j=0;$j -lt $i;$j++){
 $ws.SendKeys("{Down}")
 start-sleep -Milliseconds 500
 }
-if($noqick){
+if($nonquick){
 $ws.SendKeys("%o")
 start-sleep -s 1
 $ws.SendKeys(" ")
@@ -164,7 +165,7 @@ $ws.SendKeys(" ") #close format window
 start-sleep -s 1
 #cdm test before formating
 $cdm_after=cdm -logname "$($index)_$($systemtype)_$($allocateunit)_CDMTest_after"
-
+$freeafter = "{0:N2}" -f $((Get-PSDrive -Name $driverletter).Free)
    $runningtime=(New-TimeSpan -start $starttime -end $endttime)
    $minutes = [int]($runningtime.TotalMinutes)
    $seconds = [math]::round($runningtime.TotalSeconds % 60,2)
@@ -189,6 +190,8 @@ $cdm_after=cdm -logname "$($index)_$($systemtype)_$($allocateunit)_CDMTest_after
     formattime         = $formattime
     VolumeSize_GB      = $sizeGB
     copyfiletime       = $copytakes
+    diskfree_Before    = $freebefore
+    diskfree_After     = $freeafter
     CDM_Read_Before    = $cdm_before[0]
     CDM_Write_Before   = $cdm_before[1]
     CDM_Read_After     = $cdm_after[0]
@@ -554,6 +557,8 @@ $sublogfolder=(join-path $logfolder "OS93\CopyFrom").ToString()
         remove-item $sublogfolder -r -Force
     }
 $picfoldersub="$picfolder\OS93"
+$starttime=get-date -format "_yyMMdd-HHmmss"
+$os93log="$logfolder\OS93$($starttime).log"
 $partsize=$totalsize/20
 for($i=1;$i -le 20;$i++){
     $blockname="Part_$("{0:D2}" -f $i).BIN"
@@ -583,6 +588,8 @@ while($true){
     $ws.SendKeys(" ")
     start-sleep -s 1
     $ws.SendKeys("^v")
+    $sw2 = [Diagnostics.Stopwatch]::StartNew()
+    outlog -message "Round $($x) -Copy file starting" -logpath $os93log
     #wait 5 sec to see if alarm
     start-sleep -s 5
     screenshot -picpath $picfoldersub -picname $copyfolder
@@ -597,24 +604,20 @@ while($true){
     $ws.SendKeys("%{F4}")
     start-sleep -s 1
     $ws.SendKeys("%{F4}")
-    $datetime=get-date -format "_yyMMdd-HHmmss"
-    $csvname="OS93_result$( $datetime).csv"
-    $resultcsv=(join-path $logfolder $csvname).ToString()
-    $os93result|export-csv $resultcsv -Encoding UTF8 -NoTypeInformation
     break
     }
     while($poptext1 -like "*copying*"){
     $poptext1=(Get-PopupWindowText -TitleRegex 'complete').text
     start-sleep -s 30
     }
-    Write-Output "Copying Completed, idle for 20 min..."
+    $copytakes="$([math]::Round($sw2.Elapsed.TotalSeconds,2)) sec"
+    outlog -message "Copying Completed, idle for 20 min..." -logpath $os93log
     start-sleep -s 1200 #idle 20 mins
     #region comparefile
     $failhash=@()
     $failsize=@()
-    foreach($destfolder in $destfolders){
-        $destfiles=Get-ChildItem $destfolder -file
-        foreach ($destfiles in $destfiles){
+    $destfiles=Get-ChildItem $destfolders -file
+     foreach ($destfiles in $destfiles){
          $fromfile=(join-path $sublogfolder $destfiles.Name).ToSingle()
          $fromfilehash=Get-FileHash -Path $fromfile -Algorithm SHA256
          $destfilehash=Get-FileHash -Path $destfiles.FullName -Algorithm SHA256
@@ -627,7 +630,6 @@ while($true){
            $failsize+=@($destfiles.FullName)
          }
         }
-        
             $result="PASS"
             $failitems=@()
         if ($failsize){
@@ -641,10 +643,13 @@ while($true){
         $failitems = ($failitems |Out-String).trim()
          $os93result+=[PSCustomObject]@{
             foldername = $newdes
-            result = $result
-            failitems=$failitems
+            result     = $result
+            failitems  = $failitems
+            takingtime = $copytakes
          }
-     }
+     
+    $sw2.stop()
+    $sw2.reset()
     #endregion
     $x++
     #close 2 file explore window
@@ -655,5 +660,56 @@ while($true){
      }
 $sw.stop()
 $filltakes="$([math]::Round($sw.Elapsed.TotalSeconds,2)) sec"
-Write-Output "total copying time: $filltakes "
+outlog -message "total copying time: $($filltakes)" -logpath $os93log
+    $datetime=get-date -format "_yyMMdd-HHmmss"
+    $csvname="OS93_result$( $datetime).csv"
+    $resultcsv=(join-path $logfolder $csvname).ToString()
+    $os93result|export-csv $resultcsv -Encoding UTF8 -NoTypeInformation
    }
+
+   function poweraction([string]$powertype,[int64]$count){
+   #$currenttime=Get-Date -Format "yy/MM/dd HH:mm:ss"
+   #$recordpath=join-path $logfolder "power.csv"
+   $checkcount=0
+   if(test-path $recordpath){
+    $checkcount=(import-csv $recordpath|Where-Object{$_.type -eq $powertype}|Sort-Object -last 1).count
+   }
+    if($checkcount -lt $count){
+        $checkcount++
+        write-output "$powertype $checkcount"
+        $datetime=Get-Date -Format "yy/MM/dd HH:mm:ss"
+        $record=[PSCustomObject]@{
+            powertype = $powertype
+            count = $checkcount
+            starting = $datetime
+        }
+        $record|export-csv $recordpath -Encoding UTF8 -NoTypeInformation
+        start-sleep -s 60
+       if($powertype -eq "HS3"){
+        #judge if contains Hybrid sleep function and turn it on
+       }
+       if($powertype -eq "sleep"){
+        #judge if contains Hybrid sleep function and turn it off
+
+       }
+        if($powertype -eq "reboot"){
+    
+       }
+       if($powertype -eq "CB"){
+    
+       }
+        if($powertype -eq "reboot"){
+    
+       }
+    }
+   }
+
+
+  function outlog([string]$message,[string]$logpath){
+    $logtime=get-date -format yy/MM/dd HH:mm:ss
+    $logmessage= "[$($logtime)]$($message)"
+    if(!(test-path $logpath)){
+        new-item $logpath -force|out-null
+    }
+    add-content $logpath -Value $logmessage -Force
+  }
