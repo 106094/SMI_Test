@@ -28,6 +28,9 @@ if (!(test-path $modulepath\usbtool)){
 Expand-Archive -Path $modulepath\usbtool.zip -DestinationPath $modulepath\usbtool
 }
 $diskpath=get_driverletter
+if($diskpath.Length -eq 0){
+    exit
+}
 $driverletter=$($diskpath).replace(":","")
 $logfolder = (join-path $rootpath "logs").tostring()
 $logmain=(join-path $logfolder "all.log").tostring()
