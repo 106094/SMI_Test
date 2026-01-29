@@ -58,7 +58,7 @@ getsupportformat
 $selections=@(
     "[1] OS20:quick fomat (without file)",
     "[2] OS20:quick fomat (with 5G file)",
-    "[3] OS21:full fomat (with 5G file)",
+    "[3] OS21:full fomat  (without file)",
     "[4] OS21:full fomat (with 5G file)",
     "[5] OS93: 100G copying till disk filled"
 )
