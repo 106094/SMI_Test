@@ -1,5 +1,42 @@
 
-$psroot="$modulepath\clicktool"
+    if (-not ("Win32User32" -as [type])) {
+ Add-Type -Language CSharp -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+
+public static class Win32User32 {
+    [DllImport("user32.dll")]
+    public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+
+    [DllImport("user32.dll")]
+    public static extern bool IsIconic(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+    [DllImport("user32.dll")]
+    public static extern bool SetForegroundWindow(IntPtr hWnd);
+    
+    [DllImport("user32.dll")]
+    public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
+  
+    [DllImport("user32.dll")] 
+    public static extern IntPtr GetDC(IntPtr hwnd);
+    
+    [DllImport("gdi32.dll")] 
+    public static extern int GetDeviceCaps(IntPtr hdc, int nIndex);
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RECT {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+}
+"@
+}
+
 
 function get_driverletter{
     $driverletter=(Get-WmiObject Win32_Volume -Filter ("DriveType={0}" -f [int][System.IO.DriveType]::Removable)).DriveLetter 
@@ -16,44 +53,71 @@ function get_driverletter{
     }
     return $driverletter
 }
-function installjava([int32]$ver,[switch]$testing){
-
-    $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-    if (!$isAdmin) {
-        Start-Process powershell.exe -Verb RunAs -ArgumentList "-File `"$PSCommandPath`""
-        Exit
-    }
-
-$jdk_folder="$psroot\java\"
-if (!($env:JAVA_HOME -eq $jdk_folder)){
-    Write-Output "need install java"
-    $ver=23
-    $downloadlink=((Invoke-WebRequest https://jdk.java.net/$($ver)/).links|Where-Object {$_.href -match "windows" -and $_.innerHTML -eq "zip"}).href
-    $jdk_zip_file="$psroot\java.zip"
-    if(!$testing){
-    Invoke-WebRequest $downloadlink -OutFile $jdk_zip_file
-    Expand-Archive -Path $jdk_zip_file -DestinationPath "$psroot\java"
-    Remove-Item -Path $jdk_zip_file
-    }
-    $javabin=(get-childitem $psroot\java\ -Directory -r |Where-Object{$_.name -match "bin"}).FullName
-    # Set Environment Variables
+function installjava {
+  $jdk_folder=(join-path $psroot "java").ToString()
+  $javav=(join-path $jdk_folder "javaversion.log").ToString()
+  $output = java -version 2>&1
+  remove-item $javav -force -ErrorAction SilentlyContinue
+  set-Content $javav $output
+  $javavesion=get-content $javav
+  if($javavesion -like "*version*"){
+    return "Java installed"
+  }
+  $javabin=(get-childitem $jdk_folder -Directory -r |Where-Object{$_.name -match "bin"}).FullName
+  if($javabin){
+     # Set Environment Variables
     $path = [System.Environment]::GetEnvironmentVariable('Path', 'Machine')
     [System.Environment]::SetEnvironmentVariable('Path', $path + ';' + $javabin, 'Machine')
-
     [Environment]::SetEnvironmentVariable('JAVA_HOME', $jdk_folder, 'Machine')
     [Environment]::SetEnvironmentVariable('JDK_HOME', $jdk_folder, 'Machine')
     [Environment]::SetEnvironmentVariable('JRE_HOME', $jdk_folder, 'Machine')
     # Reload system environment variables
-    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", [System.EnvironmentVariableTarget]::Machine) + ";" + 
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", [System.EnvironmentVariableTarget]::Machine) + ";" + `
     [System.Environment]::GetEnvironmentVariable("Path", [System.EnvironmentVariableTarget]::User)
-
-    $checkJavaInstall = & java -version 2>&1
-    Write-Output $checkJavaInstall
-}
-else{
-    java -version
-    Write-Output "already installed Java"
-}
+    #$JAVAHOME=Get-ItemPropertyValue "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" -Name 'JAVA_HOME'
+    $output = java -version 2>&1
+    remove-item $javav -force
+    Add-Content $javav $output
+    $javavesion=get-content $javav
+    if($javavesion -like "*version*"){
+        return "Java installed after renew env path"
+    }
+    } 
+    Write-Output "need re-install java"
+    $pagehtml= (Invoke-WebRequest  https://jdk.java.net)
+    if ($pagehtml -match 'Ready for use:\s*<a href="/(\d+)/">JDK\s+(\d+)</a>') {
+    $jdkVersion = $matches[1]
+    $ver=$jdkVersion 
+    } else {
+        $ver=25
+    }
+    $downloadlink=((Invoke-WebRequest https://jdk.java.net/$($ver)/).links|Where-Object {$_.href -match "windows" -and $_.innerHTML -eq "zip"}).href
+    $jdk_zip_file="$psroot\java.zip"
+    remove-item $jdk_zip_file -force -ErrorAction SilentlyContinue
+    Invoke-WebRequest $downloadlink -OutFile $jdk_zip_file
+    Expand-Archive -Path $jdk_zip_file -DestinationPath "$psroot\java"
+    Remove-Item -Path $jdk_zip_file
+    $javabin=(get-childitem $psroot\java\ -Directory -r |Where-Object{$_.name -match "bin"}).FullName
+    # Set Environment Variables
+    $path = [System.Environment]::GetEnvironmentVariable('Path', 'Machine')
+    [System.Environment]::SetEnvironmentVariable('Path', $path + ';' + $javabin, 'Machine')
+    [Environment]::SetEnvironmentVariable('JAVA_HOME', $jdk_folder, 'Machine')
+    [Environment]::SetEnvironmentVariable('JDK_HOME', $jdk_folder, 'Machine')
+    [Environment]::SetEnvironmentVariable('JRE_HOME', $jdk_folder, 'Machine')
+    # Reload system environment variables
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", [System.EnvironmentVariableTarget]::Machine) + ";" + `
+    [System.Environment]::GetEnvironmentVariable("Path", [System.EnvironmentVariableTarget]::User)
+    #$JAVAHOME=Get-ItemPropertyValue "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" -Name 'JAVA_HOME'
+    $output = java -version 2>&1
+    remove-item $javav -force
+    Add-Content $javav $output
+    $javavesion=get-content $javav
+    if($javavesion -like "*version*"){
+        return "Java installed complete"
+    }
+    else{
+       write-output "Java reinstalled Fail, please check!"
+    }
 }
 function downloadsikuli{
     $sikulipath="$psroot\sikulixide-2.0.5.jar"
@@ -161,37 +225,51 @@ public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
 	}
 }
 
-function click([string]$imagef,[string]$foldername){
-    $success=$false
-    $pngs=Get-ChildItem ($psroot+"\click.sikuli\$($foldername)\$($imagef)\*.png")
-    $logspath="$psroot\SikuliLogs.txt"
+function click([string]$foldername,[string]$imagef,[string]$pyfile,[string]$passkey){
+    $clickfolder=(join-path $psroot "click.sikuli").ToString()
+    $capturefolder=(join-path $psroot "capture.sikuli").ToString()
+    if(!(test-path $clickfolder)){
+        New-Item -ItemType Directory $clickfolder|Out-Null
+    }
+    $pyfile=$($pyfile.replace(".py","")).trim()+".py"
+    $script = "$psroot\click.sikuli\$($pyfile)"
+    $jarPath="$psroot\sikulixide-2.0.5.jar"
+    $pngs=Get-ChildItem "$($capturefolder)\$($foldername)\$($imagef)_*.png"
+    $javalog="$psroot\SikuliLog.txt"
+    $mylog="$psroot\click.sikuli\SikuliLog.txt"
     $clickpng="$psroot\click.sikuli\click.png"
-    if(!(test-path  $logspath)){
-        New-Item -Path $logspath -ItemType File|out-null
+    
+    if(!(test-path  $javalog)){
+        New-Item -Path $javalog -ItemType File|out-null
     }
     foreach($png in $pngs){
         $pngpath=$png.FullName
-        $pngname=$png.Name
         Copy-Item -path $pngpath -Destination $clickpng -force
-        java -jar "$psroot\sikulixide-2.0.5.jar" -r $psroot\click.sikuli\ -v -f $psroot\SikuliLog.txt
-        $resultclick=get-content $psroot\SikuliLog.txt
-        if( $resultclick -like "*CLICK on*"){
-            $success=$true
-            break  
-        }           
-       remove-item $clickpng -Force            
+        java -jar $jarPath -r $script -v -f $javalog
+        $timesuffix=get-date -Format "_yyMMdd-HHmmss"
+        if(test-path $mylog){
+        $mylogcontent=get-content "$psroot\click.sikuli\SikuliLog.txt"
+        add-content $javalog -value $mylogcontent
+        remove-item $mylog -Force -ErrorAction SilentlyContinue
+        }
+        $javacheck=Get-Content $javalog
+        rename-item $javalog -NewName "SikuliLog_$($timesuffix).log"
+        if ($javacheck -like "*$passkey*"){
+        break
+        }
     }
-    if($success){
-        add-content $logspath -Value "$(get-date -Format "yy/MM/dd HH:mm:ss"): click on $($foldername)/$($imagef)/$($pngname) ok"
-         write-host "$(get-date -Format "yy/MM/dd HH:mm:ss"): click on $($foldername)/$($imagef)/$($pngname) ok" -ForegroundColor Green
-    }else{
-        add-content $logspath -Value "$(get-date -Format "yy/MM/dd HH:mm:ss"): click on $($foldername)/$($imagef) fail"
-        write-host "$(get-date -Format "yy/MM/dd HH:mm:ss"): click on $($foldername)/$($imagef) fail" -ForegroundColor red
-    }
-
 }
 
-function capture ([string]$foldername){
+function capture ([string]$foldername,[string]$imagef){
+    $capturefolder=(join-path $psroot "capture.sikuli").ToString()
+    if(!(test-path $capturefolder)){
+        New-Item -ItemType Directory $capturefolder|Out-Null
+    }
+    $pyfile=(join-path $capturefolder "capture.py").ToString()
+    if(!(test-path $pyfile)){
+      $pycontent="saveCapture(""Select a region"", ""capture"")"
+        add-content -Path $pyfile -Value $pycontent
+    }
     $capturef="$psroot\capture.sikuli\_capture.png"
     if(test-path  $capturef -ea SilentlyContinue){
     try{
@@ -202,14 +280,16 @@ function capture ([string]$foldername){
       exit
     }
     }
-    java -jar "$psroot\sikulixide-2.0.5.jar" -r $psroot\capture.sikuli\ -v -f $psroot\SikuliLog.txt
+    java -jar "$psroot\sikulixide-2.0.5.jar" -r $capturefolder -v -f $psroot\SikuliLog.txt
     #popup the name of the capture folder
-    $pngfolder="$psroot\click.sikuli\png\$($foldername)\"
+    $pngfolder=(join-path $capturefolder $foldername).ToString()
     if (!(test-path $pngfolder)){
+        Write-Output "new folder $pngfolder"
         New-Item -Path $pngfolder -ItemType Directory|out-null
     }
-    $filepng=(get-date -Format "yyMMddHHmmss"|Out-String).trim()+".png"
-    $filefull=join-path $pngfolder $filepng
+    $date_suffix=get-date -Format "_yyMMddHHmmss"
+    $filepng="$($imagef)$($date_suffix).png"
+    $filefull=(join-path  $pngfolder $filepng).ToString()
     copy-item -path "$psroot\capture.sikuli\_capture.png" -Destination $filefull
     remove-item $capturef -Force
 }
@@ -426,37 +506,7 @@ function Get-AppWindowRect {
         [switch]$Activate,        
         [switch]$shiftpercentage
     )
-
     # ---- Add Win32 type only once ----
-    if (-not ("Win32User32" -as [type])) {
-        Add-Type -Language CSharp -TypeDefinition @"
-using System;
-using System.Runtime.InteropServices;
-
-public static class Win32User32 {
-    [DllImport("user32.dll")]
-    public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
-
-    [DllImport("user32.dll")]
-    public static extern bool IsIconic(IntPtr hWnd);
-
-    [DllImport("user32.dll")]
-    public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
-
-    [DllImport("user32.dll")]
-    public static extern bool SetForegroundWindow(IntPtr hWnd);
-
-    [StructLayout(LayoutKind.Sequential)]
-    public struct RECT {
-        public int Left;
-        public int Top;
-        public int Right;
-        public int Bottom;
-    }
-}
-"@
-    }
-
     $procs = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue |
              Where-Object { $_.MainWindowHandle -ne 0 }
 
@@ -489,20 +539,11 @@ public static class Win32User32 {
         $ClickShiftY=$height/100*$ClickShiftY
     }
     
+    $hdc = [Win32User32]::GetDC([IntPtr]::Zero)
+    $curwidth = [Win32User32]::GetDeviceCaps($hdc, 118) # width
+    $curheight = [Win32User32]::GetDeviceCaps($hdc, 117) # height
 
-Add-Type @"
-using System;
-using System.Runtime.InteropServices;
-public class PInvoke {
-    [DllImport("user32.dll")] public static extern IntPtr GetDC(IntPtr hwnd);
-    [DllImport("gdi32.dll")] public static extern int GetDeviceCaps(IntPtr hdc, int nIndex);
-}
-"@
-    $hdc = [PInvoke]::GetDC([IntPtr]::Zero)
-    $curwidth = [PInvoke]::GetDeviceCaps($hdc, 118) # width
-    $curheight = [PInvoke]::GetDeviceCaps($hdc, 117) # height
-
-    $script:screen = [System.Windows.Forms.Screen]::PrimaryScreen
+    $screen = [System.Windows.Forms.Screen]::PrimaryScreen
     $bounds = $screen.Bounds
 
     $currentDPI = (Get-ItemProperty -Path "HKCU:\Control Panel\Desktop\WindowMetrics" -Name AppliedDPI).AppliedDPI
@@ -586,30 +627,147 @@ $bounds.Height = $curheight * $calcu
 
 function getsupportformat{
 $drive = $driverletter
-
 $fileSystems = @('NTFS', 'exFAT', 'FAT32')   # ReFS usually not available on client Windows
-
 $results = @()
-
 foreach ($fs in $fileSystems) {
     try {
         $clusters = Get-SupportedClusterSizes -DriveLetter $drive -FileSystem $fs -ErrorAction Stop
-        
         foreach ($size in $clusters) {
             $results += [PSCustomObject]@{
                 FileSystem         = $fs
                 AllocationUnitSize = $size   # already in bytes
                 AllocationUnitSizeKB = "{0:0}KB" -f ($size / 1KB)
+                skip_nofile          =""
+                skip_withfile        =""
             }
         }
     }
     catch {
         Write-Warning "File system $fs not supported or query failed on drive $drive : $_"
     }
+
+}
+if(!(test-path $settingpath)){
+$results|Export-Csv $settingpath  -NoTypeInformation -Encoding UTF8
+}
 }
 
-return $results
+function getsupportformatwin11{
+if(!(test-path $settingpath)){
+@"
+FileSystem,Support,skip_nofile,skip_withfile
+NTFS,512,"",""
+NTFS,1024,"",""
+NTFS,2048,"",""
+NTFS,4096,"",""
+NTFS,8192,"",""
+NTFS,16384,"",""
+NTFS,32768,"",""
+NTFS,65536,"",""
+NTFS,131072,"",""
+NTFS,262144,"",""
+NTFS,524288,"",""
+NTFS,1048576,"",""
+NTFS,2097152,"",""
+NTFS,4194304,"",""
+NTFS,8388608,"",""
+NTFS,16777216,"",""
+NTFS,33554432,"",""
+exFAT,512,"",""
+exFAT,1024,"",""
+exFAT,2048,"",""
+exFAT,4096,"",""
+exFAT,8192,"",""
+exFAT,16384,"",""
+exFAT,32768,"",""
+exFAT,65536,"",""
+exFAT,131072,"",""
+exFAT,262144,"",""
+exFAT,524288,"",""
+exFAT,1048576,"",""
+exFAT,2097152,"",""
+exFAT,4194304,"",""
+exFAT,8388608,"",""
+exFAT,16777216,"",""
+exFAT,33554432,"",""
+"@  | Set-Content -Path $settingpath -Encoding UTF8
+}    
+}
 
-# Optional: Export to CSV
-# $results | Export-Csv -Path "C:\Temp\FormatOptions_$drive.csv" -NoTypeInformation -Encoding UTF8
+function wpfselections{
+ param(
+    $selections
+ )
+ $i=0
+ $items=@()
+ $linesadds=foreach ($select in $selections) {
+        $i++
+        $items += "item$i"
+        "<CheckBox Name=`"item$i`" Content=`"$select`" Margin=`"0,2`"/>"
+    }
+ $linesadd = [string]::Join("`n", $linesadds)
+
+# XAML for the popup window
+$xmlcontent=@"
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        Title="Select Items"
+        Height="250" Width="300"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize">
+    <StackPanel Margin="10">
+        <TextBlock Text="Select the items you want:" FontWeight="Bold" Margin="0,0,0,10"/>
+        
+        <!-- Checkboxes -->
+        linesadd
+
+        <!-- Buttons -->
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,15,0,0">
+            <Button Name="btnOK" Content="OK" Width="70" Margin="0,0,5,0"/>
+            <Button Name="btnCancel" Content="Cancel" Width="70"/>
+        </StackPanel>
+    </StackPanel>
+</Window>
+"@
+
+[xml]$xaml = $xmlcontent.Replace("linesadd", $linesadd)
+# Load XAML
+$reader = (New-Object System.Xml.XmlNodeReader $xaml)
+$window = [Windows.Markup.XamlReader]::Load($reader)
+
+# Get controls
+$chkItems=@()
+foreach($select in $selections){
+$chkItems+=$window.FindName($select)
+}
+
+$btnOK    = $window.FindName("btnOK")
+$btnCancel= $window.FindName("btnCancel")
+ $script:SelectedItems = @()
+
+  $btnOK.Add_Click({
+        foreach ($chkName in $items) {
+            $cb = $window.FindName($chkName)
+            if ($cb -and $cb.IsChecked) {
+                $script:SelectedItems+=$cb.Content
+                
+            }
+        }
+    $window.DialogResult = $true
+    $window.Close()
+})
+
+# Cancel button click event
+$btnCancel.Add_Click({
+    $window.DialogResult = $false
+    $window.Close()
+})
+
+$window.ShowDialog()
+if ($window.DialogResult) {
+        return $script:SelectedItems
+    } else {
+        Write-Host "Selection cancelled."
+        return @()
+    }
+
 }
