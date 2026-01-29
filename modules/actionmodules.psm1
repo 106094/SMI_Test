@@ -1,4 +1,3 @@
-$usbroot="$modulepath\usbtool"
 function getusbinfo([string]$filepath){
     $busfile=$filepath.replace(".log","_bus.log")
     $volfile=$filepath.replace(".log","_vol.log")
@@ -28,7 +27,7 @@ function diskexploreaction{
   param(
     [string]$type,
     [string]$picname,
-    [switch]$formatfile,
+    [switch]$withfile,
     [switch]$nonquick,
     $formatfilesize,
     [string]$index
@@ -50,19 +49,26 @@ start-sleep -s 1
 $ws.SendKeys("%{F4}")
 }
 if($type -eq "format"){
-    $timesuffix=get-date -format "_yyMMdd-HHmmss"
-   $logfilename= "$($index)$($timesuffix).log"
- $logpath= (join-path $logfolder $logfilename=).ToString()
+ $timesuffix=get-date -format "_yyMMdd-HHmmss"
+ $logfilename= "$($index)$($timesuffix).log"
+ $logpath= (join-path $logfolder $logfilename).ToString()
+ $copytakes="-"
+ $matrix=import-csv $settingpath
+ $types=$matrix.FileSystem|Get-Unique
+ $skipcomb=@()
+if($withfile){
+    $matrix|Where-Object{$_."skip_withfile" -ne ""}|ForEach-Object{
+    $skipcomb+= "$($_."FileSystem")$($_."AllocationUnitSize"))"
+     }
+   }
+   else{
+    $matrix|Where-Object{$_."skip_nofile" -ne ""}|ForEach-Object{
+     $skipcomb+= "$($_."FileSystem")$($_."AllocationUnitSize"))"
+    }
+   }
 
- $os=testos  
- if($os -like "*11*"){
-   $messageline="Windows 11, skip from file explore format"
-    outlog -message $messageline -logpath  $logpath
-  return $messageline
- }
-$copytakes="-"
-if($formatfile){
-    Write-Output "format with file"
+if($withfile){
+    outlog "format with file"
     if($formatfilesize -ge 1GB){
         $filename="$($formatfilesize/1GB)GB"
     }
@@ -73,38 +79,37 @@ if($formatfile){
     if(!(test-path $filefull)){
     $formatfilebytes=[int64]$formatfilesize.ToString()
     fsutil file createNew $filefull $formatfilebytes
-    Write-Output "$filefull create done"
+    outlog "$filefull create done"
     }
     Format-Volume -DriveLetter "$($driverletter)" -FileSystem exFAT -AllocationUnitSize 16384 -Force
 }
-#decide which file sys/alllocate to run
-$systypes=@()
-$alllocatesizes=@()
-$formatcomb=getsupportformat
-$filesystems=$formatcomb."FileSystem"|Get-Unique| Sort-Object -Descending
-foreach($filesystem in $filesystems){
-    $indexa=$filesystems.indexof($filesystem)+1
-    $systypes+=@($indexa)
-    $indexb=($formatcomb|where-Object{$_."FileSystem" -eq $filesystem}).count
-    $alllocatesizes+=@($indexb)
-}
+#open file explore to focus the disk
 diskexploropen -openpath "shell:MyComputerFolder"
-$run=0
 for($i=0;$i -lt 20;$i++){
 $ws.SendKeys("{Right}")  #select to right most (Disk)
 start-sleep -Milliseconds 200
 }
-foreach($sys in $systypes){
-$sysdown=$systypes[$run]
-$alllocatedown=$alllocatesizes[$run]
-$systemtype=$filesystems[$run]
-for ($i=1;$i -le $alllocatedown;$i++){
- $allocateunit=((($formatcomb|Where-Object{$_."FileSystem" -eq $systemtype}).AllocationUnitSize)[$i-1])
- if([int64]$allocateunit -gt 15KB){
- $allocateunit=((($formatcomb|Where-Object{$_."FileSystem" -eq $systemtype}).AllocationUnitSizeKB)[$i-1])
- }
-   write-output "filesystem:$($systemtype), alllocation unit size:$($allocateunit)"
-   if($formatfile){
+
+#decide which file sys/alllocate to run
+foreach($type in $types){
+$downselect1=$types.indexof($type)+1
+$unitsizes=$matrix|Where-Object{$_.fileSystem -eq $type}
+ foreach($unitsiz in $unitsizes){
+    $unitsizbyte=$unitsiz."AllocationUnitSize"
+    $settingcomb="$($type)$($unitsizbyte)"
+    if($settingcomb -in $skipcomb){
+        continue
+    }
+    $downselect2=$unitsizes.indexof($unitsiz)+1
+    $unitsizstring="{0} bytes" -f $unitsizbyte
+    if ($unitsizbyte -ge 1KB) {
+    $unitsizstring = "{0} KB" -f ($unitsizbyte/ 1KB)
+    }
+   write-output "filesystem:$($type), alllocation unit size:$($unitsizstring)"
+   $settingcombstring= "$($type)_$($unitsizstring)"
+   $picnamestart="$($index)_$($settingcombstring)_Format_start"
+    $picnamecomplete="$($index)_$($settingcombstring)_Format_complete"
+   if($withfile){
    if(!(test-path $filefull)){
     fsutil file createnew $filefull $formatfilebytes|Out-Null
     }
@@ -118,80 +123,80 @@ for ($i=1;$i -le $alllocatedown;$i++){
     $totalsecs = $runningtime.TotalSeconds
     $copytakes = "{0}min {1}s" -f $minutes, $seconds
     }
-#cdm test before formating
-$cdm_before=cdm -logname "$($index)_$($systemtype)_$($allocateunit)_CDMTestbefore"
-$freebefore = "{0:N2}" -f $((Get-PSDrive -Name $driverletter).Free)
-$ws.SendKeys("{F5}")
-start-sleep -s 2
-$ws.SendKeys("+{F10}")
-start-sleep -s 2
-$ws.SendKeys("a")
-#file sys select
-start-sleep -s 1
-$ws.SendKeys("%f")
-start-sleep -s 1
-for ($j=0;$j -lt 5;$j++){
-$ws.SendKeys("{UP}") #reset to top one
-start-sleep -Milliseconds 500
-}
-for ($j=0;$j -lt $sysdown-1;$j++){
-$ws.SendKeys("{Down}")
-start-sleep -Milliseconds 500
-}
-$ws.SendKeys("%a")
-start-sleep -s 1
-$ws.SendKeys("d") #reset to top one
-start-sleep -Milliseconds 500
-for ($j=0;$j -lt $i;$j++){
-$ws.SendKeys("{Down}")
-start-sleep -Milliseconds 500
-}
-if($nonquick){
-$ws.SendKeys("%o")
-start-sleep -s 1
-$ws.SendKeys(" ")
-start-sleep -s 1
-}
-screenshot -picpath $picfolder -picname "$($index)_$($systemtype)_$($allocateunit)_settings"
-#start
-$ws.SendKeys("%s")
-#check warning
-$poptext=""
-while( !($poptext -like "*click OK*")){
- $poptext=(Get-PopupWindowText -TitleRegex 'Format').text
-start-sleep -Milliseconds 100
-}
-$ws.SendKeys(" ")
-$starttime=get-date
-#check complete
-$poptext=""
-while(!($poptext -like "*Complete*")){
-$poptext=(Get-PopupWindowText -TitleRegex 'Format').text
-start-sleep -Milliseconds 100
-}
-$endttime=get-date
-Start-Sleep -s 1
-screenshot -picpath $picfolder -picname "$($index)_$($systemtype)_$($allocateunit)_Complete"
-$ws.SendKeys(" ") #close format window
-start-sleep -s 1
-#cdm test before formating
-$cdm_after=cdm -logname "$($index)_$($systemtype)_$($allocateunit)_CDMTest_after"
-$freeafter = "{0:N2}" -f $((Get-PSDrive -Name $driverletter).Free)
-   $runningtime=(New-TimeSpan -start $starttime -end $endttime)
-   $minutes = [int]($runningtime.TotalMinutes)
-   $seconds = [math]::round($runningtime.TotalSeconds % 60,2)
-   $totalsecs =[math]::round($runningtime.TotalSeconds,2 )
-   $runtimeText = "{0}min {1}s" -f $minutes, $seconds
-   #write-output "format tooks: $runtimeText"
+    $ws.SendKeys("{F5}")
+    start-sleep -s 2
+    #cdm test before formating
+    $cdm_before=cdm -logname "$($index)_$($settingcombstring)_CDMTestbefore"
+    $freebefore = "{0:N2}" -f $((Get-PSDrive -Name $driverletter).Free)
+    $ws.SendKeys("+{F10}")
+    start-sleep -s 2
+    $ws.SendKeys("a")
+    #file sys select
+    start-sleep -s 1
+    $ws.SendKeys("%f")
+    start-sleep -s 1
+        for ($j=0;$j -lt 5;$j++){
+        $ws.SendKeys("{UP}") #reset to top one
+        start-sleep -Milliseconds 500
+        }
+    for($x=1;$x -lt $downselect1;$x++){
+        $ws.SendKeys("{Down}")
+        Start-Sleep -Milliseconds 500
+    }
+    $ws.SendKeys("%a")
+    start-sleep -s 1
+    $ws.SendKeys("d") #reset to top one
+    start-sleep -Milliseconds 500
+    for($x=0;$x -lt $downselect2;$x++){
+            $ws.SendKeys("{Down}")
+            Start-Sleep -Milliseconds 500
+    }
+    if($nonquick){
+    $ws.SendKeys("%o")
+    start-sleep -s 1
+    $ws.SendKeys(" ")
+    start-sleep -s 1
+    }
+   screenshot -picpath $picfolder -picname "$($index)_$($settingcombstring)_settings"
+    #start
+    $ws.SendKeys("%s")
+    #check warning
+    $poptext=""
+    while( !($poptext -like "*click OK*")){
+    $poptext=(Get-PopupWindowText -TitleRegex 'Format').text
+    start-sleep -Milliseconds 100
+        }
+    $ws.SendKeys(" ")
+    $starttime=get-date
+    #check complete
+    $poptext=""
+    while(!($poptext -like "*Complete*")){
+    $poptext=(Get-PopupWindowText -TitleRegex 'Format').text
+    start-sleep -Milliseconds 100
+        }
+    $endttime=get-date
+    Start-Sleep -s 1
+    screenshot -picpath $picfolder -picname "$($index)_$($settingcombstring)_Complete"
+    $ws.SendKeys(" ") #close format window
+    start-sleep -s 1
+    #cdm test before formating
+    $cdm_after=cdm -logname "$($index)_$($settingcombstring)_CDMTest_after"
+    $freeafter = "{0:N2}" -f $((Get-PSDrive -Name $driverletter).Free)
+    $runningtime=(New-TimeSpan -start $starttime -end $endttime)
+    $minutes = [int]($runningtime.TotalMinutes)
+    $seconds = [math]::round($runningtime.TotalSeconds % 60,2)
+    $totalsecs =[math]::round($runningtime.TotalSeconds,2 )
+    $runtimeText = "{0}min {1}s" -f $minutes, $seconds
+    $formattime = "$($totalsecs)s ($($runtimeText))"
+    outlog "format tooks: $runtimeText"
     $vol = Get-Volume -DriveLetter $driverletter
     $actualFS       = $vol.FileSystem
     $actualCluster  = $vol.AllocationUnitSize
     $actualalll  = "{0} bytes" -f ($actualCluster)
     if ($actualCluster -ge 15KB) {
-       $actualalll = "{0} kilibytes" -f ($actualCluster/ 1KB)
+    $actualalll = "{0} kilibytes" -f ($actualCluster/ 1KB)
     }
     $sizeGB = [math]::Round($vol.Size / 1GB,2)
-    $formattime = "$($totalsecs)s ($($runtimeText))"
     $driverpath="$($driverletter):"
     $logtime=get-date -format "yy/MM/dd HH:mm:ss"
     $formatresult=[PSCustomObject]@{
@@ -212,8 +217,7 @@ $freeafter = "{0:N2}" -f $((Get-PSDrive -Name $driverletter).Free)
     Index              = $index
     logtime            = $logtime
     }
-    $global:formatresults+=$formatresult
-    $formatresult
+$formatresult|export-csv -Path $formatcsvlog -Encoding UTF8 -NoTypeInformation -Append
 $ws.SendKeys("%{F4}") #close file explore
 start-sleep -s 1
 }
@@ -283,10 +287,23 @@ function cdm([string]$logname){
     $line
     }
 set-content $inipath -value $newcontent -Force
+
+  $checkos=get-process -name SystemSettings -ErrorAction SilentlyContinue
+  if($checkos){
+  [Win32User32]::ShowWindowAsync($checkos.MainWindowHandle, 6)|Out-Null
+  }
+
 $extracts=@()
   $cdmexe="$usbroot\CrystalDiskMark\DiskMark64.exe"
-  .$cdmexe
+    .$cdmexe
   start-sleep -s 5
+  $proc = Get-Process -Name DiskMark64
+  [Win32User32]::ShowWindowAsync($proc.MainWindowHandle, 6)|Out-Null
+   start-sleep -s 1
+  [Win32User32]::ShowWindowAsync($proc.MainWindowHandle, 9)|Out-Null
+   start-sleep -s 1
+  [Win32User32]::SetForegroundWindow($proc.MainWindowHandle)|Out-Null
+  start-sleep -s 1
   $noruntitle=(get-process -name diskmark64).MainWindowTitle
   $wclick=Get-AppWindowRect -ProcessName "diskmark64" -shiftpercentage -clickshiftX 10 -clickshiftY 2 
   $clickX=$wclick.ClickX
@@ -315,8 +332,8 @@ $extracts=@()
    }
    $endttime=get-date
    $runningtime=(New-TimeSpan -start $starttime -end $endttime)
-   $minutes = [int]$runningtime.TotalMinutes
-   $seconds = $runningtime.Seconds
+   #$minutes = [int]$runningtime.TotalMinutes
+   #$seconds = $runningtime.Seconds
    #$runtimeText = "{0}min {1}s" -f $minutes, $seconds
    #write-output "DiskMark run test for $runtimeText"
    #save image and txt
@@ -376,6 +393,13 @@ $extracts=@()
     }
   
   (get-process -name diskmark64).CloseMainWindow()|Out-Null
+  $checkos=get-process -name SystemSettings -ErrorAction SilentlyContinue
+  if($checkos){
+  [Win32User32]::ShowWindowAsync($checkos.MainWindowHandle, 9)|Out-Null
+   start-sleep -s 1
+  [Win32User32]::SetForegroundWindow($checkos.MainWindowHandle) |Out-Null
+  start-sleep -s 1
+  }
   return $extracts
 }
 
@@ -687,7 +711,7 @@ outlog -message "total copying time: $($filltakes)" -logpath $os93log
    }
     if($checkcount -lt $count){
         $checkcount++
-        write-output "$powertype $checkcount"
+        outlog "$powertype $checkcount"
         $datetime=Get-Date -Format "yy/MM/dd HH:mm:ss"
         $record=[PSCustomObject]@{
             powertype = $powertype
@@ -717,7 +741,10 @@ outlog -message "total copying time: $($filltakes)" -logpath $os93log
 
 
   function outlog([string]$message,[string]$logpath){
-    $logtime=get-date -format yy/MM/dd HH:mm:ss
+    if($logpath.length -eq 0){
+        $logpath=$logmain
+    }
+    $logtime=get-date -format "yy/MM/dd HH:mm:ss"
     $logmessage= "[$($logtime)]$($message)"
     if(!(test-path $logpath)){
         new-item $logpath -force|out-null
@@ -736,3 +763,358 @@ if ($build -ge 22000) {
    return "Win10"
 }
 }
+
+function win11format_java([string]$index,[switch]$nonquick,[switch]$withfile){
+installjava
+downloadsikuli
+$foldername="WIN11"
+$clickname="format"
+$picfolder=(join-path $picfolder $index).tostring()
+$matrix=import-csv $settingpath
+$types=$matrix.FileSystem|Get-Unique
+$javalog="$modulepath\clicktool\SikuliLog_*.log"
+$skipcomb=@()
+if($withfile){
+    $matrix|Where-Object{$_."skip_withfile" -ne ""}|ForEach-Object{
+    $skipcomb+= "$($_."FileSystem")$($_."Support"))"
+    }
+   }
+   else{
+     $matrix|Where-Object{$_."skip_nofile" -ne ""}|ForEach-Object{
+     $skipcomb+= "$($_."FileSystem")$($_."Support"))"
+    }
+   }
+if($withfile){
+  #region create 5GB file
+    outlog "format with file"
+    $formatfilesize=5GB
+    if($formatfilesize -ge 1GB){
+        $filename="$($formatfilesize/1GB)GB"
+    }
+    elseif($formatfilesize -ge 1MB){
+        $filename="$($formatfilesize/1MB)MB"
+    }
+    $filefull=(join-path $logfolder "$($filename).bin").ToString()
+    if(!(test-path $filefull)){
+    $formatfilebytes=[int64]$formatfilesize.ToString()
+    fsutil file createNew $filefull $formatfilebytes
+    outlog "$filefull create done"
+    }
+    Format-Volume -DriveLetter "$($driverletter)" -FileSystem exFAT -AllocationUnitSize 16384 -Force
+    #endregion
+}
+foreach($type in $types){
+    $downselect1=$types.indexof($type)+1
+    $unitsizes=($matrix|Where-Object{$_.FileSystem -eq $type}).Support
+    foreach($unitsiz in $unitsizes){
+        $settingcomb="$($type)$($unitsiz)"
+        if($settingcomb -in $skipcomb){
+            continue
+        }
+        $downselect2=$unitsizes.indexof($unitsiz)+1
+        $unitsizstring="{0} bytes" -f $unitsiz
+        if ($unitsiz -ge 1KB) {
+        $unitsizstring = "{0} KB" -f ($unitsiz/ 1KB)
+        }
+        $picnamestart="$($type)_$($unitsizstring)_Format_start"
+        $picnamecomplete="$($type)_$($unitsizstring)_Format_complete"
+       #region copyfile 
+       if($withfile){
+            if(!(test-path $filefull)){
+            fsutil file createnew $filefull $formatfilebytes|Out-Null
+            }
+        $dest = "$driverletter`:\"
+        $sw = [Diagnostics.Stopwatch]::StartNew()
+        Copy-Item -Path $filefull -Destination $dest -Force -ErrorAction SilentlyContinue
+        $sw.Stop()
+        $copytakes="$([math]::Round($sw.Elapsed.TotalSeconds,2)) sec"
+        $minutes = [int]$sw.Elapsed.TotalMinutes
+        $seconds = [int] $sw.Elapsed.Seconds
+        $totalsecs = $runningtime.TotalSeconds
+        $copytakes = "{0}min {1}s" -f $minutes, $seconds
+        }
+        #endregion
+        $freebefore = "{0:N2}" -f $((Get-PSDrive -Name $driverletter).Free)
+        #cdm test before formating
+        $cdm_before=cdm -logname "$($index)_$($type)_$($unitsizstring)_CDMTestbefore"
+        click -foldername $foldername -imagef $clickname -pyfile "click.py" -passkey "CLICK on"
+        #save format time
+        $ws.SendKeys("{TAB}")
+        Start-Sleep -Milliseconds 500
+        #select fiile system
+        #reset to top
+        for($x=1;$x -le 5;$x++){
+            $ws.SendKeys("{UP}")
+            Start-Sleep -Milliseconds 200
+        }
+        #select
+        for($x=1;$x -lt $downselect1;$x++){
+            $ws.SendKeys("{Down}")
+            Start-Sleep -Milliseconds 500
+        }
+        $ws.SendKeys("{TAB}")
+        Start-Sleep -Milliseconds 500
+        #reset to top
+        for($x=1;$x -le 20;$x++){
+            $ws.SendKeys("{UP}")
+            Start-Sleep -Milliseconds 200
+        }
+        #select alllocated unit size
+        for($x=1;$x -lt $downselect2;$x++){
+            $ws.SendKeys("{Down}")
+            Start-Sleep -Milliseconds 500
+        }
+        if([int64]$unitsiz -lt 8000){
+        $ws.SendKeys("{TAB}")
+        Start-Sleep -Milliseconds 500
+        }
+        $ws.SendKeys("{TAB}")
+        Start-Sleep -Milliseconds 500
+        if($nonquick){
+        $ws.SendKeys(" ")
+        Start-Sleep -Milliseconds 500
+        }
+        $ws.SendKeys("{TAB}")
+        screenshot -picpath $picfolder -picname $picnamestart
+        outlog "start format [$type]-[$unitsizstring]"
+        click -foldername $foldername -imagef $clickname -pyfile "click2.py" -passkey "elapsed time"
+        screenshot -picpath $picfolder -picname $picnamecomplete
+       # $ws.SendKeys("{Enter}")
+       # Start-Sleep -s 5
+       # $ws.SendKeys("{Enter}")
+        $javalogfull=Get-ChildItem -path $javalog|Sort-Object LastWriteTime|Select-Object -last 1
+        $javalogcontent=get-content $javalogfull.FullName
+        $total = 0
+       $javalogcontent | ForEach-Object {
+            if ($_ -match 'doFindImage: end (\d+) msec') {
+                $total += [int]$matches[1]
+            }
+            if ($_ -match 'doFindImage: in original: %([\d*\.]+)') {
+                $lastMatchPercent = [double]$matches[1]
+            }
+        }
+         $result="-"
+        if($lastMatchPercent -gt 70){
+            $result="OK"
+        }
+        $totalsecs=$total/1000
+        #CDM testing
+        $cdm_after=cdm -logname "$($index)_$($type)_$($unitsizstring)_CDMTest_after"
+        $freeafter = "{0:N2}" -f $((Get-PSDrive -Name $driverletter).Free)
+        $vol = Get-Volume -DriveLetter $driverletter
+        $actualFS       = $vol.FileSystem
+        $actualCluster  = $vol.AllocationUnitSize
+        $actualalll  = "{0} bytes" -f ($actualCluster)
+        if ($actualCluster -ge 15KB) {
+        $actualalll = "{0} kilibytes" -f ($actualCluster/ 1KB)
+        }
+        $sizeGB = [math]::Round($vol.Size / 1GB,2)
+        $formattime = "$($totalsecs)s"
+        $driverpath="$($driverletter):"
+        $logtime=get-date -format "yy/MM/dd HH:mm:ss"
+        $formatresult=[PSCustomObject]@{
+            Drive              = $driverpath
+            FileSystem         = $actualFS
+            AllocationUnitSize = $actualalll
+            formattime         = $formattime
+            VolumeSize_GB      = $sizeGB
+            copyfiletime       = $copytakes
+            diskfree_Before    = $freebefore
+            diskfree_After     = $freeafter
+            CDM_Read_Before    = $cdm_before[0]
+            CDM_Write_Before   = $cdm_before[1]
+            CDM_Read_After     = $cdm_after[0]
+            CDM_Write_After    = $cdm_after[1]
+            Criteria           = "TBD"
+            Result             = $result
+            Index              = $index
+            logtime            = $logtime
+            }
+    $formatresult|export-csv -Path $formatcsvlog -Encoding UTF8 -NoTypeInformation -Append
+    }
+}
+}
+function win11format([string]$index,[switch]$nonquick,[switch]$withfile){
+installjava
+downloadsikuli
+$foldername="WIN11"
+$clickname="format"
+$picfolder=(join-path $picfolder $index).tostring()
+$matrix=import-csv $settingpath
+$types=$matrix.FileSystem|Get-Unique
+$javalog="$modulepath\clicktool\SikuliLog_*.log"
+$skipcomb=@()
+if($withfile){
+    $matrix|Where-Object{$_."skip_withfile" -ne ""}|ForEach-Object{
+    $skipcomb+= "$($_."FileSystem")$($_."Support"))"
+    }
+   }
+   else{
+     $matrix|Where-Object{$_."skip_nofile" -ne ""}|ForEach-Object{
+     $skipcomb+= "$($_."FileSystem")$($_."Support"))"
+    }
+   }
+if($withfile){
+  #region create 5GB file
+    outlog "format with file"
+    $formatfilesize=5GB
+    if($formatfilesize -ge 1GB){
+        $filename="$($formatfilesize/1GB)GB"
+    }
+    elseif($formatfilesize -ge 1MB){
+        $filename="$($formatfilesize/1MB)MB"
+    }
+    $filefull=(join-path $logfolder "$($filename).bin").ToString()
+    if(!(test-path $filefull)){
+    $formatfilebytes=[int64]$formatfilesize.ToString()
+    fsutil file createNew $filefull $formatfilebytes
+    outlog "$filefull create done"
+    }
+    Format-Volume -DriveLetter "$($driverletter)" -FileSystem exFAT -AllocationUnitSize 16384 -Force
+    #endregion
+}
+foreach($type in $types){
+    $downselect1=$types.indexof($type)+1
+    $unitsizes=($matrix|Where-Object{$_.FileSystem -eq $type}).Support
+    foreach($unitsiz in $unitsizes){
+        $settingcomb="$($type)$($unitsiz)"
+        if($settingcomb -in $skipcomb){
+            continue
+        }
+        $downselect2=$unitsizes.indexof($unitsiz)+1
+        $unitsizstring="{0} bytes" -f $unitsiz
+        if ($unitsiz -ge 1KB) {
+        $unitsizstring = "{0} KB" -f ($unitsiz/ 1KB)
+        }
+        $picnamestart="$($type)_$($unitsizstring)_Format_start"
+        $picnamecomplete="$($type)_$($unitsizstring)_Format_complete"
+       #region copyfile 
+       if($withfile){
+            if(!(test-path $filefull)){
+            fsutil file createnew $filefull $formatfilebytes|Out-Null
+            }
+        $dest = "$driverletter`:\"
+        $sw = [Diagnostics.Stopwatch]::StartNew()
+        Copy-Item -Path $filefull -Destination $dest -Force -ErrorAction SilentlyContinue
+        $sw.Stop()
+        $copytakes="$([math]::Round($sw.Elapsed.TotalSeconds,2)) sec"
+        $minutes = [int]$sw.Elapsed.TotalMinutes
+        $seconds = [int] $sw.Elapsed.Seconds
+        $totalsecs = $runningtime.TotalSeconds
+        $copytakes = "{0}min {1}s" -f $minutes, $seconds
+        }
+        #endregion
+        $freebefore = "{0:N2}" -f $((Get-PSDrive -Name $driverletter).Free)
+        #cdm test before formating
+        $cdm_before=cdm -logname "$($index)_$($type)_$($unitsizstring)_CDMTestbefore"
+        start-sleep -s 5
+        click -foldername $foldername -imagef $clickname -pyfile "click.py" -passkey "CLICK on"
+        #save format time
+        $ws.SendKeys("{TAB}")
+        Start-Sleep -Milliseconds 500
+        #select fiile system
+        #reset to top
+        for($x=1;$x -le 5;$x++){
+            $ws.SendKeys("{UP}")
+            Start-Sleep -Milliseconds 200
+        }
+        #select
+        for($x=1;$x -lt $downselect1;$x++){
+            $ws.SendKeys("{Down}")
+            Start-Sleep -Milliseconds 500
+        }
+        $ws.SendKeys("{TAB}")
+        Start-Sleep -Milliseconds 500
+        #reset to top
+        for($x=1;$x -le 20;$x++){
+            $ws.SendKeys("{UP}")
+            Start-Sleep -Milliseconds 200
+        }
+        #select alllocated unit size
+        for($x=1;$x -lt $downselect2;$x++){
+            $ws.SendKeys("{Down}")
+            Start-Sleep -Milliseconds 500
+        }
+        if([int64]$unitsiz -lt 8000){
+        $ws.SendKeys("{TAB}")
+        Start-Sleep -Milliseconds 500
+        }
+        $ws.SendKeys("{TAB}")
+        Start-Sleep -Milliseconds 500
+        if($nonquick){
+        $ws.SendKeys(" ")
+        Start-Sleep -Milliseconds 500
+        }
+        $ws.SendKeys("{TAB}")
+        Start-Sleep -s 1
+        screenshot -picpath $picfolder -picname $picnamestart
+        outlog "$($index)_$($type)_$($unitsizstring)_FormatStart"
+        $ws.SendKeys("{Enter}")
+        Start-Sleep -s 5
+        [Clicker]::LeftClickAtPoint($screenwidth/2, $screenheight/2)
+        Start-Sleep -s 1
+        $ws.SendKeys("{TAB}")
+        Start-Sleep -s 1
+        $ws.SendKeys("{TAB}")
+        Start-Sleep -s 1
+        $ws.SendKeys("{Enter}")
+        if($sw){
+        $sw.reset()
+        }
+        $sw = [Diagnostics.Stopwatch]::StartNew()
+        $dirverdisk="$($driverletter):\"
+        $diskback=$false
+         while(!$diskback){
+          $diskback= Get-item $dirverdisk -ErrorAction Ignore
+          start-sleep -s 1
+        }
+        $sw.stop()
+        outlog "$($index)_$($type)_$($unitsizstring)_FormatComplete"
+        $totalsecs = [math]::Round($sw.Elapsed.TotalSeconds, 2)
+        $formattime = "{0}min {1}s" -f $minutes, $seconds
+        $minutes = [int]($runningtime.TotalMinutes)
+        [int]$seconds= 0 
+        $minutes = [math]::DivRem([int]$runningtime.TotalSeconds, 60, [ref]$seconds)
+        $totalsecs =[math]::round($runningtime.TotalSeconds,2 )
+        $runtimeText = "{0}min {1}s" -f $minutes, $seconds
+        $formattime  = "$totalsecs s ($runtimeText)"
+        start-sleep -s 10
+        screenshot -picpath $picfolder -picname $picnamecomplete
+        #CDM testing
+        $cdm_after=cdm -logname "$($index)_$($type)_$($unitsizstring)_CDMTest_after"
+        start-sleep -s 5
+        $freeafter = "{0:N2}" -f $((Get-PSDrive -Name $driverletter).Free)
+        $vol = Get-Volume -DriveLetter $driverletter
+        $actualFS       = $vol.FileSystem
+        $actualCluster  = $vol.AllocationUnitSize
+        $actualalll  = "{0} bytes" -f ($actualCluster)
+        if ($actualCluster -ge 15KB) {
+        $actualalll = "{0} kilibytes" -f ($actualCluster/ 1KB)
+        }
+        $sizeGB = [math]::Round($vol.Size / 1GB,2)
+        $formattime = "$($totalsecs)s"
+        $driverpath="$($driverletter):"
+        $logtime=get-date -format "yy/MM/dd HH:mm:ss"
+        $formatresult=[PSCustomObject]@{
+            Drive              = $driverpath
+            FileSystem         = $actualFS
+            AllocationUnitSize = $actualalll
+            formattime         = $formattime
+            VolumeSize_GB      = $sizeGB
+            copyfiletime       = $copytakes
+            diskfree_Before    = $freebefore
+            diskfree_After     = $freeafter
+            CDM_Read_Before    = $cdm_before[0]
+            CDM_Write_Before   = $cdm_before[1]
+            CDM_Read_After     = $cdm_after[0]
+            CDM_Write_After    = $cdm_after[1]
+            Criteria           = "TBD"
+            Result             = $result
+            Index              = $index
+            logtime            = $logtime
+            }
+    $formatresult|export-csv -Path $formatcsvlog -Encoding UTF8 -NoTypeInformation -Append
+    }
+}
+}
+
