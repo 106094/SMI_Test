@@ -780,7 +780,7 @@ $version = [System.Environment]::OSVersion.Version
 $versionString = $version.ToString()
 $build = $version.Build
 
-if ($build -ge 22000) {
+if ([int64]$build -ge 22000) {
    return "Win11"
 } else {
    return "Win10"
