@@ -38,6 +38,8 @@ $picfolder = (join-path $logfolder "screenshots").tostring()
 if(!(test-path $picfolder)){
 new-item -itemtype directory $picfolder |Out-Null
 }
+$ostype=testos
+Write-Output $ostype
 if(testos -match "11"){
 $settingpath="$modulepath\fs_cluster_sizes_win11.csv"
 if(!(test-path $settingpath)){
