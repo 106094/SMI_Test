@@ -13,7 +13,7 @@ function getusbinfo([string]$filepath){
         $btime=(Get-ChildItem $volfile).LastWriteTime
     }
 }
-function diskexploropen([string]$openpath){
+function diskexploropen([string]$openpath,[switch]$disk){
 Start-Process explorer.exe -ArgumentList $openpath -WindowStyle Maximized
 start-sleep -s 10
 [Clicker]::LeftClickAtPoint($screenwidth/2, $screenheight/2)
@@ -22,6 +22,12 @@ $ws.SendKeys("^+7") #Tiles view
 start-sleep -s 1
 $ws.SendKeys(" ") 
 start-sleep -s 1
+if($disk){
+for($i=0;$i -lt 20;$i++){
+$ws.SendKeys("{Right}")  #select to right most (Disk)
+start-sleep -Milliseconds 200
+}
+}
 }
 function diskexploreaction{
   param(
@@ -34,11 +40,7 @@ function diskexploreaction{
 #from disk property to check file system type (e.g. FAT32, NTFS, exFAT)
 $picfolder=(join-path $picfolder $index).tostring()
 if($type -eq "property"){
-diskexploropen -openpath "shell:MyComputerFolder"
-for($i=0;$i -lt 20;$i++){
-$ws.SendKeys("{Right}")  #select to right most (Disk)
-start-sleep -Milliseconds 200
-}
+diskexploropen -openpath "shell:MyComputerFolder" -disk
 start-sleep -s 1
 $ws.SendKeys("%{Enter}")
 start-sleep -s 2
@@ -86,11 +88,7 @@ if($withfile){
     #endregion
 }
 #open file explore to focus the disk
-diskexploropen -openpath "shell:MyComputerFolder"
-for($i=0;$i -lt 20;$i++){
-$ws.SendKeys("{Right}")  #select to right most (Disk)
-start-sleep -Milliseconds 200
-}
+diskexploropen -openpath "shell:MyComputerFolder" -disk
 
 #decide which file sys/alllocate to run
 foreach($type in $types){
@@ -510,14 +508,13 @@ function Get-FsMatrixGuiLike {
 
     return $matrix
 }
-function New-FsutilFile {
+function FileCreate {
     param(
         [Parameter(Mandatory, ParameterSetName='BySize')]
         [Int64]$SizeBytes,
         [Parameter(ParameterSetName='FillDisk')]
         [switch]$FillDisk,
         [Parameter(ParameterSetName='FillDisk')]
-        [Int64]$ReserveBytes = 10MB,
         [string]$FileName = 'fsutil_test.bin',
         [string]$Filepath
     )
@@ -526,46 +523,34 @@ function New-FsutilFile {
          $Filepath="$($driverletter)`:"
     }
     $path = Join-Path $Filepath $FileName
-    Remove-Item $path -Force -ErrorAction SilentlyContinue
-     
-    $filelength=(get-childitem $Filepath).length
+    Remove-Item  $path -Force -ErrorAction SilentlyContinue
     $diskfreebefore=(Get-PSDrive -Name $driverletter).Free
     $diskusedbefore=(Get-PSDrive -Name $driverletter).Used
     $Size_MB="$([math]::Round($filelength / 1MB,2)) MB"
-    $sizeafter="$($filelength) ($($Size_MB))"
         if($FillDisk){
-        $SizeBytes = $diskfreebefore - $ReserveBytes
-        if([int64]$SizeBytes -ge 10MB){
-        $cheklog=fsutil file createnew $path $SizeBytes
-            while($cheklog -match "not enough space"){
-                $ReserveBytes+=10MB
-                $SizeBytes = $diskfreebefore - $ReserveBytes
-                $SizeBytes        
-                $cheklog=fsutil file createnew $path $SizeBytes
-            }
+        Remove-Item $Filepath\* -r -Force -ErrorAction SilentlyContinue
+        $SizeBytes=$diskfreebefore - 1
         }
-        }
-        else{
-        $cheklog=fsutil file createnew $path $SizeBytes
-        }
+        $fs = [System.IO.File]::Open( $path,'Create','Write','None')
+        $fs.SetLength($SizeBytes)
+        $fs.Close()
     # verify result
     $filelength=(get-childitem $Filepath).length
+    if($filelength -eq $SizeBytes){
+         $result="PASS"
+    }
+    else{
+        $result="FAIL"
+    }
     $diskfreeafter=(Get-PSDrive -Name $driverletter).Free
     $diskusedafter=(Get-PSDrive -Name $driverletter).Used
     $Size_MB="$([math]::Round($filelength / 1MB,2)) MB"
     $sizeafter="$($filelength) ($($Size_MB))"
     #$Size_GB="$([math]::Round($f.Length/ 1GB,2)) GB"
-    if($cheklog -match "created"){
-        $result="PASS ($($cheklog))"
-    }
-    else{
-        $result="FAIL ($($cheklog))"
-    }
     $fscheck=[PSCustomObject]@{
         FilePath     = $path
         fsutilsize   = $SizeBytes
-        Size_before  = $f.Length
-        Size_after   = $sizeafter
+        FileSize     = $sizeafter
         Drive        = "$($driverletter):"
         result         = $result
         DiskUsed_Before  = $diskusedbefore
@@ -633,7 +618,7 @@ while($true){
     $newdes="$($destpath)\$($copyfolder)"
     new-item -itemtype directory -path $newdes|out-null
     $destpath="$($driverletter):" 
-    diskexploropen -openpath $sublogfolder 
+    diskexploropen -openpath $sublogfolder
     start-sleep -s 5
     $ws.SendKeys(" ")
     start-sleep -s 1
@@ -1034,8 +1019,8 @@ foreach($type in $types){
         #endregion
         #region fillfile in disk 
         if($fillfile){
-        $filldisk=New-FsutilFile -FillDisk
-        diskexploropen -openpath "shell:MyComputerFolder"
+        $filldisk=FileCreate -FillDisk
+        diskexploropen -openpath "shell:MyComputerFolder" -disk
         screenshot -picpath $picfolder -picname "Filldisk_BeforeFormat"
         $ws.SendKeys("%{F4}") #close file explore
         }
@@ -1116,7 +1101,7 @@ foreach($type in $types){
         $formattime  = "$totalsecs s ($runtimeText)"
         start-sleep -s 10
         screenshot -picpath $picfolder -picname $picnamecomplete
-        diskexploropen -openpath "shell:MyComputerFolder"
+        diskexploropen -openpath "shell:MyComputerFolder" -disk
         screenshot -picpath $picfolder -picname "Filldisk_BeforeFormat"
         $ws.SendKeys("%{F4}") #close file explore
         #CDM testing
