@@ -90,14 +90,14 @@ function installjava {
     }
     }
     Write-Output "need re-install java"
-    $pagehtml= (Invoke-WebRequest  https://jdk.java.net)
+    $pagehtml= Invoke-WebRequest  https://jdk.java.net -UseBasicParsing
     if ($pagehtml -match 'Ready for use:\s*<a href="/(\d+)/">JDK\s+(\d+)</a>') {
     $jdkVersion = $matches[1]
-    $ver=$jdkVersion 
+    $ver=$jdkVersion  
     } else {
         $ver=25
     }
-    $downloadlink=((Invoke-WebRequest https://jdk.java.net/$($ver)/).links|Where-Object {$_.href -match "windows" -and $_.innerHTML -eq "zip"}).href
+    $downloadlink=((Invoke-WebRequest https://jdk.java.net/$($ver)/ ).links|Where-Object {$_.href -match "windows" -and $_.innerHTML -match "zip"}).href
     $jdk_zip_file="$psroot\java.zip"
     remove-item $jdk_zip_file -force -ErrorAction SilentlyContinue
     Invoke-WebRequest $downloadlink -OutFile $jdk_zip_file
