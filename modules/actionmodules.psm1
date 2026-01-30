@@ -29,7 +29,6 @@ function diskexploreaction{
     [string]$picname,
     [switch]$withfile,
     [switch]$nonquick,
-    $formatfilesize,
     [string]$index
   )
 #from disk property to check file system type (e.g. FAT32, NTFS, exFAT)
@@ -68,7 +67,9 @@ if($withfile){
    }
 
 if($withfile){
+  #region create 5GB file
     outlog "format with file"
+    $formatfilesize=5GB
     if($formatfilesize -ge 1GB){
         $filename="$($formatfilesize/1GB)GB"
     }
@@ -82,6 +83,7 @@ if($withfile){
     outlog "$filefull create done"
     }
     Format-Volume -DriveLetter "$($driverletter)" -FileSystem exFAT -AllocationUnitSize 16384 -Force
+    #endregion
 }
 #open file explore to focus the disk
 diskexploropen -openpath "shell:MyComputerFolder"
@@ -205,7 +207,6 @@ $unitsizes=$matrix|Where-Object{$_.fileSystem -eq $type}
     AllocationUnitSize = $actualalll
     formattime         = $formattime
     VolumeSize_GB      = $sizeGB
-    copyfiletime       = $copytakes
     diskfree_Before    = $freebefore
     diskfree_After     = $freeafter
     CDM_Read_Before    = $cdm_before[0]
@@ -520,37 +521,59 @@ function New-FsutilFile {
         [string]$FileName = 'fsutil_test.bin',
         [string]$Filepath
     )
-
-    $path = "$($driverletter)`:\$FileName"
-    if($Filepath.Length -gt 0){
-        $path = Join-Path $Filepath $FileName
+       
+    if($Filepath.Length -eq 0){
+         $Filepath="$($driverletter)`:"
     }
+    $path = Join-Path $Filepath $FileName
     Remove-Item $path -Force -ErrorAction SilentlyContinue
-        $psd = Get-PSDrive -Name $driverletter
-        $free = $psd.Free
+     
+    $filelength=(get-childitem $Filepath).length
+    $diskfreebefore=(Get-PSDrive -Name $driverletter).Free
+    $diskusedbefore=(Get-PSDrive -Name $driverletter).Used
+    $Size_MB="$([math]::Round($filelength / 1MB,2)) MB"
+    $sizeafter="$($filelength) ($($Size_MB))"
         if($FillDisk){
         $SizeBytes = $free - $ReserveBytes
-        }
+        if([int64]$SizeBytes -ge 10MB){
         $cheklog=fsutil file createnew $path $SizeBytes
-        while($cheklog -match "not enough space"){
-            $ReserveBytes+=10MB
-            $SizeBytes = $free - $ReserveBytes
-            $SizeBytes        
-            $cheklog=fsutil file createnew $path $SizeBytes
+            while($cheklog -match "not enough space"){
+                $ReserveBytes+=10MB
+                $SizeBytes = $free - $ReserveBytes
+                $SizeBytes        
+                $cheklog=fsutil file createnew $path $SizeBytes
+            }
+        }
+        }
+        else{
+        $cheklog=fsutil file createnew $path $SizeBytes
         }
     # verify result
-    $f = Get-Item $path
-    $Size_MB="$([math]::Round($f.Length / 1MB,2)) MB"
-    $Size_GB="$([math]::Round($f.Length/ 1GB,2)) GB" 
-    [PSCustomObject]@{
-        Path        = $path
-        Size_Bytes  = $f.Length
-        Size_MB     = $Size_MB
-        Size_GB     = $Size_GB
-        Drive       = "$($driverletter):"
-        Mode        = $PSCmdlet.ParameterSetName
-        Free_After  = (Get-PSDrive -Name $driverletter).Free
+    $filelength=(get-childitem $Filepath).length
+    $diskfreeafter=(Get-PSDrive -Name $driverletter).Free
+    $diskusedafter=(Get-PSDrive -Name $driverletter).Used
+    $Size_MB="$([math]::Round($filelength / 1MB,2)) MB"
+    $sizeafter="$($filelength) ($($Size_MB))"
+    #$Size_GB="$([math]::Round($f.Length/ 1GB,2)) GB"
+    if($cheklog -match "created"){
+        $result="PASS ($($cheklog))"
     }
+    else{
+        $result="FAIL ($($cheklog))"
+    }
+    $fscheck=[PSCustomObject]@{
+        FilePath     = $path
+        fsutilsize   = $SizeBytes
+        Size_before  = $f.Length
+        Size_after   = $sizeafter
+        Drive        = "$($driverletter):"
+        result         = $result
+        DiskUsed_Before  = $diskusedbefore
+        DiskUsed_After   = $diskusedafter
+        DiskFree_Before  = $diskfreebefore
+        DiskFree_After   = $diskfreeafter
+    }
+    return $fscheck
 }
 
 function getdiskinfo([string]$index){
@@ -918,7 +941,6 @@ foreach($type in $types){
             AllocationUnitSize = $actualalll
             formattime         = $formattime
             VolumeSize_GB      = $sizeGB
-            copyfiletime       = $copytakes
             diskfree_Before    = $freebefore
             diskfree_After     = $freeafter
             CDM_Read_Before    = $cdm_before[0]
@@ -934,11 +956,12 @@ foreach($type in $types){
     }
 }
 }
-function win11format([string]$index,[switch]$nonquick,[switch]$withfile){
+function win11format([string]$index,[switch]$nonquick,[switch]$withfile,[switch]$fillfile){
 installjava
 downloadsikuli
 $foldername="WIN11"
 $clickname="format"
+$fillfiletake="-"
 $picfolder=(join-path $picfolder $index).tostring()
 $matrix=import-csv $settingpath
 $types=$matrix.FileSystem|Get-Unique
@@ -954,25 +977,6 @@ if($withfile){
      $skipcomb+= "$($_."FileSystem")$($_."Support"))"
     }
    }
-if($withfile){
-  #region create 5GB file
-    outlog "format with file"
-    $formatfilesize=5GB
-    if($formatfilesize -ge 1GB){
-        $filename="$($formatfilesize/1GB)GB"
-    }
-    elseif($formatfilesize -ge 1MB){
-        $filename="$($formatfilesize/1MB)MB"
-    }
-    $filefull=(join-path $logfolder "$($filename).bin").ToString()
-    if(!(test-path $filefull)){
-    $formatfilebytes=[int64]$formatfilesize.ToString()
-    fsutil file createNew $filefull $formatfilebytes
-    outlog "$filefull create done"
-    }
-    Format-Volume -DriveLetter "$($driverletter)" -FileSystem exFAT -AllocationUnitSize 16384 -Force
-    #endregion
-}
 foreach($type in $types){
     $downselect1=$types.indexof($type)+1
     $unitsizes=($matrix|Where-Object{$_.FileSystem -eq $type}).Support
@@ -982,16 +986,19 @@ foreach($type in $types){
             continue
         }
         $downselect2=$unitsizes.indexof($unitsiz)+1
+        if($fillfile -and $downselect2 -gt 1){
+            continue
+        }
         $unitsizstring="{0} bytes" -f $unitsiz
         if ($unitsiz -ge 1KB) {
         $unitsizstring = "{0} KB" -f ($unitsiz/ 1KB)
         }
         $picnamestart="$($type)_$($unitsizstring)_Format_start"
         $picnamecomplete="$($type)_$($unitsizstring)_Format_complete"
-       #region copyfile 
-       if($withfile){
-            if(!(test-path $filefull)){
-            fsutil file createnew $filefull $formatfilebytes|Out-Null
+        #region 5G copy
+        if($withfile){
+        if(!(test-path $filefull)){
+        fsutil file createnew $filefull $formatfilebytes|Out-Null
             }
         $dest = "$driverletter`:\"
         $sw = [Diagnostics.Stopwatch]::StartNew()
@@ -1002,6 +1009,14 @@ foreach($type in $types){
         $seconds = [int] $sw.Elapsed.Seconds
         $totalsecs = $runningtime.TotalSeconds
         $copytakes = "{0}min {1}s" -f $minutes, $seconds
+        }
+        #endregion
+        #region fillfile in disk 
+        if($fillfile){
+        $filldisk=New-FsutilFile -FillDisk
+        diskexploropen -openpath "shell:MyComputerFolder"
+        screenshot -picpath $picfolder -picname "Filldisk_BeforeFormat"
+        $ws.SendKeys("%{F4}") #close file explore
         }
         #endregion
         $freebefore = "{0:N2}" -f $((Get-PSDrive -Name $driverletter).Free)
@@ -1080,6 +1095,9 @@ foreach($type in $types){
         $formattime  = "$totalsecs s ($runtimeText)"
         start-sleep -s 10
         screenshot -picpath $picfolder -picname $picnamecomplete
+        diskexploropen -openpath "shell:MyComputerFolder"
+        screenshot -picpath $picfolder -picname "Filldisk_BeforeFormat"
+        $ws.SendKeys("%{F4}") #close file explore
         #CDM testing
         $cdm_after=cdm -logname "$($index)_$($type)_$($unitsizstring)_CDMTest_after"
         start-sleep -s 5
@@ -1101,7 +1119,6 @@ foreach($type in $types){
             AllocationUnitSize = $actualalll
             formattime         = $formattime
             VolumeSize_GB      = $sizeGB
-            copyfiletime       = $copytakes
             diskfree_Before    = $freebefore
             diskfree_After     = $freeafter
             CDM_Read_Before    = $cdm_before[0]
