@@ -45,6 +45,12 @@ if(!(test-path $settingpath)){
     $ws.Popup("Please check if need revise format settings!`n[fs_cluster_sizes_win10.csv] in $modulepath", 0, "System Alert", 48 + 0)|Out-Null
     exit
 }
+$selections=@(
+    "[1] OS20:quick fomat (Fill file)",
+    "[2] OS21:full fomat (without file)",
+    "[3] OS21:full fomat (with 5G file)",
+    "[4] OS93: 100G copying till disk filled"
+)
 }
 else{
 $settingpath="$modulepath\fs_cluster_sizes_win10.csv"
@@ -53,15 +59,16 @@ getsupportformat
     $ws.Popup("Please check if need revise format settings!`n [fs_cluster_sizes_win10.csv] in $modulepath", 0, "System Alert", 48 + 0)|Out-Null
     exit
 }
-}
-
 $selections=@(
     "[1] OS20:quick fomat (without file)",
     "[2] OS20:quick fomat (with 5G file)",
-    "[3] OS21:full fomat  (without file)",
+    "[3] OS21:full fomat (without file)",
     "[4] OS21:full fomat (with 5G file)",
     "[5] OS93: 100G copying till disk filled"
 )
+}
+
+
 $options=wpfselections -selections $selections
 <#skip
 diskexploreaction -type "property" -picname "OS03-B"
@@ -73,10 +80,9 @@ $clustercheck=test_diskClusterSize -DeviceType "FLASH" -index "OS06-D" #OS06-D
 $formatcsvlog=csvlogname -filename "formatMatrix_result"
 
 if(testos -match "11"){
-if($options -like "*[1]*"){win11format -index "OS20Scen2_clean"}
-if($options -like "*[2]*"){win11format -index "OS20Scen2_file" -withfile}
-if($options -like "*[3]*"){win11format -index "OS21Scen2_clean" -nonquick}
-if($options -like "*[4]*"){win11format -index "OS21Scen2_file" -withfile -nonquick}
+if($options -like "*[1]*"){win11format -index "OS20Scen2_clean" -fillfile}
+if($options -like "*[2]*"){win11format -index "OS21Scen2_clean" -nonquick}
+if($options -like "*[3]*"){win11format -index "OS21Scen2_file" -withfile -nonquick}
 }
 else{
 if($options -like "*[1]*"){diskexploreaction -type "format" -index "OS20Scen1_clean"} #OS20 format
@@ -84,7 +90,7 @@ if($options -like "*[2]*"){diskexploreaction -type "format" -withfile -formatfil
 if($options -like "*[3]*"){diskexploreaction -type "format" -index "OS21Scen1_clean" -nonquick} #OS20 full format
 if($options -like "*[4]*"){diskexploreaction -type "format" -withfile -formatfilesize 5GB -index "OS21scen1_file" -nonquick} #OS20 with 5GB file copied before full format
 }
-if($options -like "*[5]*"){
+if($options -like "*OS93*"){
 OS93
 }
 
