@@ -54,9 +54,9 @@ function get_driverletter{
     return $driverletter
 }
 function installjava {
-  if(test-path $psroot){
   $jdk_folder=(join-path $psroot "java").ToString()
   $javav=(join-path $jdk_folder "javaversion.log").ToString()
+  if(test-path $jdk_folder){
   $output = java -version 2>&1
   remove-item $javav -force -ErrorAction SilentlyContinue
   set-Content $javav $output
@@ -98,6 +98,10 @@ function installjava {
     $jdk_zip_file="$psroot\java.zip"
     remove-item $jdk_zip_file -force -ErrorAction SilentlyContinue
     Invoke-WebRequest $downloadlink -OutFile $jdk_zip_file
+    Write-Output "JAVA Tool downloading"
+    while (!(test-path $jdk_zip_file)){
+        start-sleep -s 3
+    }
     Expand-Archive -Path $jdk_zip_file -DestinationPath "$psroot\java"
     Remove-Item -Path $jdk_zip_file
     $javabin=(get-childitem $psroot\java\ -Directory -r |Where-Object{$_.name -match "bin"}).FullName
