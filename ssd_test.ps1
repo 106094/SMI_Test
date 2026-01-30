@@ -24,8 +24,8 @@ $psroot="$modulepath\clicktool"
 $usbroot="$modulepath\usbtool"
 Import-Module $modulepath\functionmodules.psm1 -force
 Import-Module $modulepath\actionmodules.psm1 -force
-if (!(test-path $modulepath\usbtool)){
-Expand-Archive -Path $modulepath\usbtool.zip -DestinationPath $modulepath\usbtool
+if (!(test-path $usbroot)){
+Expand-Archive -Path $modulepath\usbtool.zip -DestinationPath $usbroot
 }
 $diskpath=get_driverletter
 if($diskpath.Length -eq 0){
@@ -41,7 +41,7 @@ new-item -itemtype directory $picfolder |Out-Null
 $build = Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion" -Name "CurrentBuild" | Select-Object -ExpandProperty CurrentBuild
 Write-Output $ostype
 if([int]$build -ge 22000){
-    $os="WIN11"
+$os="WIN11"
 $settingpath="$modulepath\fs_cluster_sizes_win11.csv"
 if(!(test-path $settingpath)){
     getsupportformatwin11
@@ -54,6 +54,9 @@ $selections=@(
     "[3] OS21:full fomat (with 5G file)",
     "[4] OS93: 100G copying till disk filled"
 )
+if (!(test-path $psroot)){
+Expand-Archive -Path $modulepath\clicktool.zip -DestinationPath $psroot
+}
 }
 else{
 $os="WIN10"
