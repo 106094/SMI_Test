@@ -38,9 +38,10 @@ $picfolder = (join-path $logfolder "screenshots").tostring()
 if(!(test-path $picfolder)){
 new-item -itemtype directory $picfolder |Out-Null
 }
-$ostype=testos
+$build = Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion" -Name "CurrentBuild" | Select-Object -ExpandProperty CurrentBuild
 Write-Output $ostype
-if($ostype -match "11"){
+if([int]$build -ge 22000){
+    $os="WIN11"
 $settingpath="$modulepath\fs_cluster_sizes_win11.csv"
 if(!(test-path $settingpath)){
     getsupportformatwin11
@@ -55,6 +56,7 @@ $selections=@(
 )
 }
 else{
+$os="WIN10"
 $settingpath="$modulepath\fs_cluster_sizes_win10.csv"
 if(!(test-path $settingpath)){
 getsupportformat
@@ -81,7 +83,7 @@ $clustercheck=test_diskClusterSize -DeviceType "FLASH" -index "OS06-D" #OS06-D
 
 $formatcsvlog=csvlogname -filename "formatMatrix_result"
 
-if(testos -match "11"){
+if($os -match "11"){
 if($options -like "*[1]*"){win11format -index "OS20Scen2_clean" -fillfile}
 if($options -like "*[2]*"){win11format -index "OS21Scen2_clean" -nonquick}
 if($options -like "*[3]*"){win11format -index "OS21Scen2_file" -withfile -nonquick}
