@@ -45,7 +45,7 @@ if([int]$build -ge 22000){
 $settingpath="$modulepath\fs_cluster_sizes_win11.csv"
 if(!(test-path $settingpath)){
     getsupportformatwin11
-    $ws.Popup("Please check if need revise format settings!`n[fs_cluster_sizes_win10.csv] in $modulepath", 0, "System Alert", 48 + 0)|Out-Null
+    $ws.Popup("Please check if need revise format settings!`n[fs_cluster_sizes_win11.csv] in $modulepath", 0, "System Alert", 48 + 0)|Out-Null
     exit
 }
 $selections=@(
