@@ -119,7 +119,8 @@ function installjava {
     [System.Environment]::GetEnvironmentVariable("Path", [System.EnvironmentVariableTarget]::User)
     #$JAVAHOME=Get-ItemPropertyValue "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" -Name 'JAVA_HOME'
     $output = java -version 2>&1
-    remove-item $javav -force
+    remove-item $javav -force -ErrorAction SilentlyContinue
+    new-item $javav |out-null
     Add-Content $javav $output
     $javavesion=get-content $javav
     if($javavesion -like "*version*"){
