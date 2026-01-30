@@ -54,6 +54,7 @@ function get_driverletter{
     return $driverletter
 }
 function installjava {
+  if(test-path $psroot){
   $jdk_folder=(join-path $psroot "java").ToString()
   $javav=(join-path $jdk_folder "javaversion.log").ToString()
   $output = java -version 2>&1
@@ -63,6 +64,7 @@ function installjava {
   if($javavesion -like "*version*"){
     return "Java installed"
   }
+  
   $javabin=(get-childitem $jdk_folder -Directory -r |Where-Object{$_.name -match "bin"}).FullName
   if($javabin){
      # Set Environment Variables
@@ -82,7 +84,8 @@ function installjava {
     if($javavesion -like "*version*"){
         return "Java installed after renew env path"
     }
-    } 
+    }
+    }
     Write-Output "need re-install java"
     $pagehtml= (Invoke-WebRequest  https://jdk.java.net)
     if ($pagehtml -match 'Ready for use:\s*<a href="/(\d+)/">JDK\s+(\d+)</a>') {
