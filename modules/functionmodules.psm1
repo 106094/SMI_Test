@@ -1,5 +1,5 @@
 
-    if (-not ("Win32User32" -as [type])) {
+if (-not ("Win32User32" -as [type])) {
  Add-Type -Language CSharp -TypeDefinition @"
 using System;
 using System.Runtime.InteropServices;
@@ -37,7 +37,18 @@ public static class Win32User32 {
 "@
 }
 
+if (-not ("Mouse" -as [type])) {
+Add-Type @"
+using System.Runtime.InteropServices;
+public class Mouse {
+    [DllImport("user32.dll")]
+    public static extern void mouse_event(int flags, int dx, int dy, int data, int extra);
+}
+"@
+}
 
+# Mouse wheel down
+#[Mouse]::mouse_event(0x0800, 0, 0, -120, 0)
 function get_driverletter{
     $driverletter=(Get-WmiObject Win32_Volume -Filter ("DriveType={0}" -f [int][System.IO.DriveType]::Removable)).DriveLetter 
      if(!$driverletter){
