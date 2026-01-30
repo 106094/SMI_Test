@@ -54,6 +54,9 @@ function get_driverletter{
     return $driverletter
 }
 function installjava {
+  if (!(test-path $psroot)){
+    new-item -ItemType Directory $psroot|Out-Null
+  }
   $jdk_folder=(join-path $psroot "java").ToString()
   $javav=(join-path $jdk_folder "javaversion.log").ToString()
   if(test-path $jdk_folder){
