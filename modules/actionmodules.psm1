@@ -102,7 +102,7 @@ $unitsizes=$matrix|Where-Object{$_.fileSystem -eq $type}
     }
     $downselect2=$unitsizes.indexof($unitsiz)+1
     $unitsizstring="{0} bytes" -f $unitsizbyte
-    if ($unitsizbyte -ge 1KB) {
+    if ([int64]$unitsizbyte -ge 1KB) {
     $unitsizstring = "{0} KB" -f ($unitsizbyte/ 1KB)
     }
    write-output "filesystem:$($type), alllocation unit size:$($unitsizstring)"
@@ -823,7 +823,7 @@ foreach($type in $types){
         }
         $downselect2=$unitsizes.indexof($unitsiz)+1
         $unitsizstring="{0} bytes" -f $unitsiz
-        if ($unitsiz -ge 1KB) {
+        if ([int64]$unitsiz -ge 1KB) {
         $unitsizstring = "{0} KB" -f ($unitsiz/ 1KB)
         }
         $picnamestart="$($type)_$($unitsizstring)_Format_start"
@@ -995,7 +995,7 @@ foreach($type in $types){
             continue
         }
         $unitsizstring="{0} bytes" -f $unitsiz
-        if ($unitsiz -ge 1KB) {
+        if ([int64]$unitsiz -ge 1KB) {
         $unitsizstring = "{0} KB" -f ($unitsiz/ 1KB)
         }
         $picnamestart="$($type)_$($unitsizstring)_Format_start"
