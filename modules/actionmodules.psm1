@@ -823,8 +823,10 @@ if($withfile){
     fsutil file createNew $filefull $formatfilebytes
     outlog "$filefull create done"
     }
-    Format-Volume -DriveLetter "$($driverletter)" -FileSystem exFAT -AllocationUnitSize 16384 -Force
     #endregion
+}
+if($fillfile -or $withfile){
+    Format-Volume -DriveLetter "$($driverletter)" -FileSystem exFAT -AllocationUnitSize 16384 -Force
 }
 foreach($type in $types){
     $downselect1=$types.indexof($type)+1
@@ -977,6 +979,27 @@ if($withfile){
      $skipcomb+= "$($_."FileSystem")$($_."Support"))"
     }
    }
+ if($withfile){
+  #region create 5GB file
+    outlog "format with file"
+    $formatfilesize=5GB
+    if($formatfilesize -ge 1GB){
+        $filename="$($formatfilesize/1GB)GB"
+    }
+    elseif($formatfilesize -ge 1MB){
+        $filename="$($formatfilesize/1MB)MB"
+    }
+    $filefull=(join-path $logfolder "$($filename).bin").ToString()
+    if(!(test-path $filefull)){
+    $formatfilebytes=[int64]$formatfilesize.ToString()
+    fsutil file createNew $filefull $formatfilebytes
+    outlog "$filefull create done"
+    }
+    #endregion
+}
+if($fillfile -or $withfile){
+    Format-Volume -DriveLetter "$($driverletter)" -FileSystem exFAT -AllocationUnitSize 16384 -Force
+}
 foreach($type in $types){
     $downselect1=$types.indexof($type)+1
     $unitsizes=($matrix|Where-Object{$_.FileSystem -eq $type}).Support
