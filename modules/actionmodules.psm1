@@ -15,7 +15,7 @@ function getusbinfo([string]$filepath){
 }
 function diskexploropen([string]$openpath,[switch]$disk){
 Start-Process explorer.exe -ArgumentList $openpath -WindowStyle Maximized
-start-sleep -s 10
+start-sleep -s 20
 [Clicker]::LeftClickAtPoint($screenwidth/2, $screenheight/2)
 start-sleep -s 1
 $ws.SendKeys("^+7") #Tiles view
@@ -286,7 +286,7 @@ function cdm([string]$logname){
     $line
     }
 set-content $inipath -value $newcontent -Force
-
+(get-process -name "SystemSettings")| Set-WindowState -State MINIMIZE
   $checkos=get-process -name SystemSettings -ErrorAction SilentlyContinue
   if($checkos){
   [Win32User32]::ShowWindowAsync($checkos.MainWindowHandle, 6)|Out-Null
@@ -516,7 +516,8 @@ function FileCreate {
         [switch]$FillDisk,
         [Parameter(ParameterSetName='FillDisk')]
         [string]$FileName = 'fsutil_test.bin',
-        [string]$Filepath
+        [string]$Filepath,
+        [int64]$leftsize
     )
        
     if($Filepath.Length -eq 0){
@@ -528,8 +529,9 @@ function FileCreate {
     $diskusedbefore=(Get-PSDrive -Name $driverletter).Used
     $Size_MB="$([math]::Round($filelength / 1MB,2)) MB"
         if($FillDisk){
-        Remove-Item $Filepath\* -r -Force -ErrorAction SilentlyContinue
-        $SizeBytes=$diskfreebefore - 1
+        format "$($driverletter):" /FS:NTFS /V:Test /Q /X /Y |out-null
+        start-sleep -s 5
+        $SizeBytes=$diskfreebefore - $leftsize
         }
         $fs = [System.IO.File]::Open( $path,'Create','Write','None')
         $fs.SetLength($SizeBytes)
@@ -980,9 +982,6 @@ if($withfile){
     }
     #endregion
 }
-if($fillfile -or $withfile){
-    Format-Volume -DriveLetter "$($driverletter)" -FileSystem exFAT -AllocationUnitSize 16384 -Force
-}
 foreach($type in $types){
     $downselect1=$types.indexof($type)+1
     $unitsizes=($matrix|Where-Object{$_.FileSystem -eq $type}).Support
@@ -1019,7 +1018,10 @@ foreach($type in $types){
         #endregion
         #region fillfile in disk 
         if($fillfile){
+           . $rootpath\filldisk.exe
+         <#   
         $filldisk=FileCreate -FillDisk
+        #>
         diskexploropen -openpath "shell:MyComputerFolder" -disk
         screenshot -picpath $picfolder -picname "Filldisk_BeforeFormat"
         $ws.SendKeys("%{F4}") #close file explore
@@ -1029,6 +1031,7 @@ foreach($type in $types){
         #cdm test before formating
         $cdm_before=cdm -logname "$($index)_$($type)_$($unitsizstring)_CDMTestbefore"
         start-sleep -s 5
+        openformat
         click -foldername $foldername -imagef $clickname -pyfile "click.py" -passkey "CLICK on"
         #save format time
         $ws.SendKeys("{TAB}")
@@ -1137,7 +1140,26 @@ foreach($type in $types){
             logtime            = $logtime
             }
     $formatresult|export-csv -Path $formatcsvlog -Encoding UTF8 -NoTypeInformation -Append
+    get-process -name "systemsettings"|stop-process
     }
 }
 }
 
+function openformat{
+$coors=get-content $modulepath/coordinate_check_tool/click.txt
+$clickx=($coors.split(","))[0]
+$clicky=($coors.split(","))[1]
+ Start-Process ms-settings:disksandvolumes
+ start-sleep -s 20
+  $ws.AppActivate("Settings")
+  start-sleep -s 2
+  1..5 | ForEach-Object {
+    $ws.SendKeys("{PGDN}")
+    Start-Sleep -Milliseconds 200
+}
+[Mouse]::mouse_event(0x0800, 0, 0, -120, 0)
+  start-sleep -s 1
+ [Clicker]::LeftClickAtPoint($clickx, $clicky)
+  start-sleep -s 2
+  $ws.SendKeys("{DOWN 2}")
+}
