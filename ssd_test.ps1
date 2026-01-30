@@ -84,6 +84,8 @@ $file1024=test-FileSizeOnDisk 1024 -index "OS06-C" #OS06-C
 $clustercheck=test_diskClusterSize -DeviceType "FLASH" -index "OS06-D" #OS06-D
 #>
 
+minimized -hideappnames "ssd_test.exe"
+minimized -hideappnames "cmd"
 $formatcsvlog=csvlogname -filename "formatMatrix_result"
 
 if($os -match "11"){
