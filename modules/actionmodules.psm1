@@ -1149,10 +1149,16 @@ function openformat{
 $coors=get-content $modulepath/coordinate_check_tool/click.txt
 $clickx=($coors.split(","))[0]
 $clicky=($coors.split(","))[1]
- Start-Process ms-settings:disksandvolumes -WindowStyle Maximized
+ Start-Process ms-settings:disksandvolumes
  start-sleep -s 20
-  $ws.AppActivate("Settings")
+  $ws.SendKeys("{tab}")
+  start-sleep -s 1
+  $ws.SendKeys("{tab}")
+  start-sleep -s 1
+  $ws.SendKeys("% ")
   start-sleep -s 2
+  $ws.SendKeys("x")
+  start-sleep -s 1
   1..5 | ForEach-Object {
     $ws.SendKeys("{PGDN}")
     Start-Sleep -Milliseconds 200
