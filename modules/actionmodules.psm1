@@ -776,11 +776,9 @@ outlog -message "total copying time: $($filltakes)" -logpath $os93log
   }
 
 function testos{
-$version = [System.Environment]::OSVersion.Version
-$versionString = $version.ToString()
-$build = $version.Build
+$build = Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion" -Name "CurrentBuild" | Select-Object -ExpandProperty CurrentBuild
 
-if ([int64]$build -ge 22000) {
+if ([int]$build -ge 22000) {
    return "Win11"
 } else {
    return "Win10"
