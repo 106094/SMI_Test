@@ -534,12 +534,12 @@ function New-FsutilFile {
     $Size_MB="$([math]::Round($filelength / 1MB,2)) MB"
     $sizeafter="$($filelength) ($($Size_MB))"
         if($FillDisk){
-        $SizeBytes = $free - $ReserveBytes
+        $SizeBytes = $diskfreebefore - $ReserveBytes
         if([int64]$SizeBytes -ge 10MB){
         $cheklog=fsutil file createnew $path $SizeBytes
             while($cheklog -match "not enough space"){
                 $ReserveBytes+=10MB
-                $SizeBytes = $free - $ReserveBytes
+                $SizeBytes = $diskfreebefore - $ReserveBytes
                 $SizeBytes        
                 $cheklog=fsutil file createnew $path $SizeBytes
             }
