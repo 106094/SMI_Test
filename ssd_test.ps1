@@ -91,10 +91,10 @@ if($options -like "*[[]2[]]*"){win11format -index "OS21Scen2_clean" -nonquick}
 if($options -like "*[[]3[]]*"){win11format -index "OS21Scen2_file" -withfile -nonquick}
 }
 else{
-if($options -like "*[[]1[]]*"){diskexploreaction -actiontype "format" -index "OS20Scen1_clean"} #OS20 format
-if($options -like "*[[]2[]]*"){diskexploreaction -actiontype "format" -withfile -formatfilesize 5GB -index "OS20Scen1_file"} #OS20 with 5GB file copied before format
-if($options -like "*[[]3[]]*"){diskexploreaction -actiontype "format" -index "OS21Scen1_clean" -nonquick} #OS20 full format
-if($options -like "*[[]4[]]*"){diskexploreaction -actiontype "format" -withfile -formatfilesize 5GB -index "OS21scen1_file" -nonquick} #OS20 with 5GB file copied before full format
+if($options -like "*[[]1[]]*"){win11format -index "OS20Scen1_clean"} #OS20 format
+if($options -like "*[[]2[]]*"){win11format -index "OS20Scen1_file" -withfile } #OS20 with 5GB file copied before format
+if($options -like "*[[]3[]]*"){win11format -index "OS21Scen1_clean" -nonquick } #OS21 full format
+if($options -like "*[[]4[]]*"){win11format -index "OS21scen1_file" -withfile -nonquick} #OS21 with 5GB file copied before full format
 }
 if($options -like "*OS93*"){
 OS93
