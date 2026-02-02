@@ -1345,15 +1345,17 @@ function formatdisk{
         Format-Volume `
         -DriveLetter $driverletter `
         -FileSystem $filesys `
-        -AllocationUnitSize $unitsiz`
-        -Full
+        -AllocationUnitSize $unitsiz `
+        -Full `
+        -NewFileSystemLabel "DATA" `
         -Confirm:$false
     }
     else{
 Format-Volume `
         -DriveLetter $driverletter `
         -FileSystem $filesys `
-        -AllocationUnitSize $unitsiz`
+        -AllocationUnitSize $unitsiz `
+        -NewFileSystemLabel "DATA" `
         -Confirm:$false
         
     }
