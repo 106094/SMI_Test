@@ -1032,7 +1032,7 @@ foreach($type in $types){
         $cdm_before=cdm -logname "$($index)_$($type)_$($unitsizstring)_CDMTestbefore"
         start-sleep -s 5
         openformat
-        click -foldername $foldername -imagef $clickname -pyfile "click.py" -passkey "CLICK on"
+        #click -foldername $foldername -imagef $clickname -pyfile "click.py" -passkey "CLICK on"
         #save format time
         $ws.SendKeys("{TAB}")
         Start-Sleep -Milliseconds 500
@@ -1147,8 +1147,10 @@ foreach($type in $types){
 
 function openformat{
 $coors=get-content $modulepath/coordinate_check_tool/click.txt
-$clickx=($coors.split(","))[0]
-$clicky=($coors.split(","))[1]
+$clickx=($coors[0].split(","))[0]
+$clicky=($coors[0].split(","))[1]
+$clickx2=($coors[1].split(","))[0]
+$clicky2=($coors[1].split(","))[1]
  Start-Process ms-settings:disksandvolumes
  start-sleep -s 20
 [KeySends.KeySend]::KeyDown([System.Windows.Forms.Keys]::Menu)
@@ -1162,12 +1164,15 @@ $clicky=($coors.split(","))[1]
   $ws.SendKeys("x")
   start-sleep -s 1
   1..5 | ForEach-Object {
-    $ws.SendKeys("{PGDN}")
-    Start-Sleep -Milliseconds 200
+  [Mouse]::mouse_event(0x0800, 0, 0, -120, 0)
 }
-[Mouse]::mouse_event(0x0800, 0, 0, -120, 0)
   start-sleep -s 1
  [Clicker]::LeftClickAtPoint($clickx, $clicky)
   start-sleep -s 2
-  $ws.SendKeys("{DOWN 2}")
+    1..5 | ForEach-Object {
+  [Mouse]::mouse_event(0x0800, 0, 0, -120, 0)
+}
+ start-sleep -s 1
+[Clicker]::LeftClickAtPoint($clickx2, $clicky2)
+  start-sleep -s 1
 }
