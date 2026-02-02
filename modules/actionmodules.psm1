@@ -286,7 +286,9 @@ function cdm([string]$logname){
     $line
     }
 set-content $inipath -value $newcontent -Force
+if(get-process -name "SystemSettings" -ea SilentlyContinue){
 (get-process -name "SystemSettings")| Set-WindowState -State MINIMIZE
+}
   $checkos=get-process -name SystemSettings -ErrorAction SilentlyContinue
   if($checkos){
   [Win32User32]::ShowWindowAsync($checkos.MainWindowHandle, 6)|Out-Null
@@ -1183,7 +1185,6 @@ $fillfiletake="-"
 $picfolder=(join-path $picfolder $index).tostring()
 $matrix=import-csv $settingpath
 $types=$matrix.FileSystem|Get-Unique
-$javalog="$modulepath\clicktool\SikuliLog_*.log"
 $skipcomb=@()
 if($withfile){
     $matrix|Where-Object{$_."skip_withfile" -ne ""}|ForEach-Object{
@@ -1220,7 +1221,7 @@ foreach($type in $types){
         if($settingcomb -in $skipcomb){
             continue
         }
-        if($fillfile -and $downselect2 -gt 1){
+        if($fillfile -and $downselect2 -gt 1 -and $os -match "11"){
             continue
         }
         $unitsizstring="{0} bytes" -f $unitsiz
@@ -1342,21 +1343,11 @@ function formatdisk{
             [switch]$full
         )
     if($full){
-        Format-Volume `
-        -DriveLetter $driverletter `
-        -FileSystem $filesys `
-        -AllocationUnitSize $unitsiz `
-        -Full `
-        -NewFileSystemLabel "DATA" `
-        -Confirm:$false
+      Format-Volume -Full -DriveLetter $driverletter -FileSystem $filesys -AllocationUnitSize $unitsiz -NewFileSystemLabel "DATA" -Confirm:$false
     }
     else{
-Format-Volume `
-        -DriveLetter $driverletter `
-        -FileSystem $filesys `
-        -AllocationUnitSize $unitsiz `
-        -NewFileSystemLabel "DATA" `
-        -Confirm:$false
+      Format-Volume -DriveLetter $driverletter -FileSystem $filesys -AllocationUnitSize $unitsiz -NewFileSystemLabel "DATA" -Confirm:$false
+
         
     }
 }
