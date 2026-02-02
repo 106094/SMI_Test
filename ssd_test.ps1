@@ -86,15 +86,15 @@ $clustercheck=test_diskClusterSize -DeviceType "FLASH" -index "OS06-D" #OS06-D
 (get-process -name "ssd_test")| Set-WindowState -State MINIMIZE
 
 if($os -match "11"){
-if($options -like "*[1]*"){win11format -index "OS20Scen2_clean" -fillfile}
-if($options -like "*[2]*"){win11format -index "OS21Scen2_clean" -nonquick}
-if($options -like "*[3]*"){win11format -index "OS21Scen2_file" -withfile -nonquick}
+if($options -like "*[[]1[]]*"){win11format -index "OS20Scen2_clean" -fillfile}
+if($options -like "*[[]2[]]*"){win11format -index "OS21Scen2_clean" -nonquick}
+if($options -like "*[[]3[]]*"){win11format -index "OS21Scen2_file" -withfile -nonquick}
 }
 else{
-if($options -like "*[1]*"){diskexploreaction -type "format" -index "OS20Scen1_clean"} #OS20 format
-if($options -like "*[2]*"){diskexploreaction -type "format" -withfile -formatfilesize 5GB -index "OS20Scen1_file"} #OS20 with 5GB file copied before format
-if($options -like "*[3]*"){diskexploreaction -type "format" -index "OS21Scen1_clean" -nonquick} #OS20 full format
-if($options -like "*[4]*"){diskexploreaction -type "format" -withfile -formatfilesize 5GB -index "OS21scen1_file" -nonquick} #OS20 with 5GB file copied before full format
+if($options -like "*[[]1[]]*"){diskexploreaction -type "format" -index "OS20Scen1_clean"} #OS20 format
+if($options -like "*[[]2[]]*"){diskexploreaction -type "format" -withfile -formatfilesize 5GB -index "OS20Scen1_file"} #OS20 with 5GB file copied before format
+if($options -like "*[[]3[]]*"){diskexploreaction -type "format" -index "OS21Scen1_clean" -nonquick} #OS20 full format
+if($options -like "*[[]4[]]*"){diskexploreaction -type "format" -withfile -formatfilesize 5GB -index "OS21scen1_file" -nonquick} #OS20 with 5GB file copied before full format
 }
 if($options -like "*OS93*"){
 OS93
