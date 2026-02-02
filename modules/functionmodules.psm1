@@ -793,3 +793,60 @@ if ($window.DialogResult) {
     }
 
 }
+function serialportsend {
+    param(
+        [Parameter(Mandatory)]
+        [string]$sendkeys
+    )
+
+    $ports = [System.IO.Ports.SerialPort]::GetPortNames()
+
+    if ($ports.Count -ne 1) {
+        throw "Expected exactly 1 COM port, found $($ports.Count): $ports"
+    }
+
+    $portName = $ports[0]
+
+    $port = New-Object System.IO.Ports.SerialPort -Property @{
+        PortName     = $portName
+        BaudRate     = 115200
+        DataBits     = 8
+        Parity       = "None"
+        StopBits     = "One"
+        Handshake    = "None"
+        ReadTimeout  = 2000
+        WriteTimeout = 2000
+        NewLine      = "`r`n"
+    }
+
+    try {
+        $port.Open()
+        $port.WriteLine($sendkeys)   # 👈 sends newline
+    }
+    finally {
+        if ($port.IsOpen) { $port.Close() }
+        $port.Dispose()
+    }
+}
+
+
+function Open-Serial {
+    param(
+        [string]$Com = "COM3",
+        [int]$Baud = 115200
+    )
+
+    $sp = New-Object System.IO.Ports.SerialPort $Com, $Baud, "None", 8, "One"
+    $sp.ReadTimeout = 1000
+    $sp.WriteTimeout = 1000
+    $sp.NewLine = "`r`n"
+    $sp.Open()
+    return $sp
+}
+<#usage
+$sp = Open-Serial COM3 9600
+$sp.WriteLine("AT")
+Start-Sleep 0.2
+$sp.ReadExisting()
+$sp.Close()
+#>
