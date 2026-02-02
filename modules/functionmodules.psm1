@@ -315,85 +315,98 @@ function capture ([string]$foldername,[string]$imagef){
     copy-item -path "$psroot\capture.sikuli\_capture.png" -Destination $filefull
     remove-item $capturef -Force
 }
-
 $cSource = @'
 using System;
-using System.Drawing;
 using System.Runtime.InteropServices;
-using System.Windows.Forms;
+
 public class Clicker
 {
-//https://msdn.microsoft.com/en-us/library/windows/desktop/ms646270(v=vs.85).aspx
-[StructLayout(LayoutKind.Sequential)]
-struct INPUT
-{ 
-    public int        type; // 0 = INPUT_MOUSE,
-                            // 1 = INPUT_KEYBOARD
-                            // 2 = INPUT_HARDWARE
-    public MOUSEINPUT mi;
-}
+    [StructLayout(LayoutKind.Sequential)]
+    struct INPUT
+    {
+        public int type;
+        public MOUSEINPUT mi;
+    }
 
-//https://msdn.microsoft.com/en-us/library/windows/desktop/ms646273(v=vs.85).aspx
-[StructLayout(LayoutKind.Sequential)]
-struct MOUSEINPUT
-{
-    public int    dx ;
-    public int    dy ;
-    public int    mouseData ;
-    public int    dwFlags;
-    public int    time;
-    public IntPtr dwExtraInfo;
-}
+    [StructLayout(LayoutKind.Sequential)]
+    struct MOUSEINPUT
+    {
+        public int dx;
+        public int dy;
+        public int mouseData;
+        public int dwFlags;
+        public int time;
+        public IntPtr dwExtraInfo;
+    }
 
-//This covers most use cases although complex mice may have additional buttons
-//There are additional constants you can use for those cases, see the msdn page
-const int MOUSEEVENTF_MOVED      = 0x0001 ;
-const int MOUSEEVENTF_LEFTDOWN   = 0x0002 ;
-const int MOUSEEVENTF_LEFTUP     = 0x0004 ;
-const int MOUSEEVENTF_RIGHTDOWN  = 0x0008 ;
-const int MOUSEEVENTF_RIGHTUP    = 0x0010 ;
-const int MOUSEEVENTF_MIDDLEDOWN = 0x0020 ;
-const int MOUSEEVENTF_MIDDLEUP   = 0x0040 ;
-const int MOUSEEVENTF_WHEEL      = 0x0080 ;
-const int MOUSEEVENTF_XDOWN      = 0x0100 ;
-const int MOUSEEVENTF_XUP        = 0x0200 ;
-const int MOUSEEVENTF_ABSOLUTE   = 0x8000 ;
+    const int INPUT_MOUSE = 0;
 
-const int screen_length = 0x10000 ;
+    const int MOUSEEVENTF_MOVED    = 0x0001;
+    const int MOUSEEVENTF_LEFTDOWN = 0x0002;
+    const int MOUSEEVENTF_LEFTUP   = 0x0004;
+    const int MOUSEEVENTF_RIGHTDOWN= 0x0008;
+    const int MOUSEEVENTF_RIGHTUP  = 0x0010;
+    const int MOUSEEVENTF_ABSOLUTE = 0x8000;
 
-//https://msdn.microsoft.com/en-us/library/windows/desktop/ms646310(v=vs.85).aspx
-[System.Runtime.InteropServices.DllImport("user32.dll")]
-extern static uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
+    const int SM_CXSCREEN = 0;
+    const int SM_CYSCREEN = 1;
 
-public static void LeftClickAtPoint(int x, int y)
-{
-    //Move the mouse
-    INPUT[] input = new INPUT[3];
-    input[0].mi.dx = x*(65535/System.Windows.Forms.Screen.PrimaryScreen.Bounds.Width);
-    input[0].mi.dy = y*(65535/System.Windows.Forms.Screen.PrimaryScreen.Bounds.Height);
-    input[0].mi.dwFlags = MOUSEEVENTF_MOVED | MOUSEEVENTF_ABSOLUTE;
-    //Left mouse button down
-    input[1].mi.dwFlags = MOUSEEVENTF_LEFTDOWN;
-    //Left mouse button up
-    input[2].mi.dwFlags = MOUSEEVENTF_LEFTUP;
-    SendInput(3, input, Marshal.SizeOf(input[0]));
-}
-public static void rightClickAtPoint(int x, int y)
-{
-    //Move the mouse
-    INPUT[] input = new INPUT[3];
-    input[0].mi.dx = x*(65535/System.Windows.Forms.Screen.PrimaryScreen.Bounds.Width);
-    input[0].mi.dy = y*(65535/System.Windows.Forms.Screen.PrimaryScreen.Bounds.Height);
-    input[0].mi.dwFlags = MOUSEEVENTF_MOVED | MOUSEEVENTF_ABSOLUTE;
-    //Left mouse button down
-    input[1].mi.dwFlags = MOUSEEVENTF_RIGHTDOWN;
-    //Left mouse button up
-    input[2].mi.dwFlags = MOUSEEVENTF_RIGHTUP;
-    SendInput(3, input, Marshal.SizeOf(input[0]));
-}
+    [DllImport("user32.dll")]
+    static extern int GetSystemMetrics(int nIndex);
+
+    [DllImport("user32.dll")]
+    static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
+
+    static int ScaleX(int x)
+    {
+        int w = GetSystemMetrics(SM_CXSCREEN);
+        return (int)(x * 65535.0 / (w - 1));
+    }
+
+    static int ScaleY(int y)
+    {
+        int h = GetSystemMetrics(SM_CYSCREEN);
+        return (int)(y * 65535.0 / (h - 1));
+    }
+
+    public static void LeftClickAtPoint(int x, int y)
+    {
+        INPUT[] input = new INPUT[3];
+
+        input[0].type = INPUT_MOUSE;
+        input[0].mi.dx = ScaleX(x);
+        input[0].mi.dy = ScaleY(y);
+        input[0].mi.dwFlags = MOUSEEVENTF_MOVED | MOUSEEVENTF_ABSOLUTE;
+
+        input[1].type = INPUT_MOUSE;
+        input[1].mi.dwFlags = MOUSEEVENTF_LEFTDOWN;
+
+        input[2].type = INPUT_MOUSE;
+        input[2].mi.dwFlags = MOUSEEVENTF_LEFTUP;
+
+        SendInput(3, input, Marshal.SizeOf(typeof(INPUT)));
+    }
+
+    public static void RightClickAtPoint(int x, int y)
+    {
+        INPUT[] input = new INPUT[3];
+
+        input[0].type = INPUT_MOUSE;
+        input[0].mi.dx = ScaleX(x);
+        input[0].mi.dy = ScaleY(y);
+        input[0].mi.dwFlags = MOUSEEVENTF_MOVED | MOUSEEVENTF_ABSOLUTE;
+
+        input[1].type = INPUT_MOUSE;
+        input[1].mi.dwFlags = MOUSEEVENTF_RIGHTDOWN;
+
+        input[2].type = INPUT_MOUSE;
+        input[2].mi.dwFlags = MOUSEEVENTF_RIGHTUP;
+
+        SendInput(3, input, Marshal.SizeOf(typeof(INPUT)));
+    }
 }
 '@
-Add-Type -TypeDefinition $cSource -ReferencedAssemblies System.Windows.Forms,System.Drawing
+Add-Type -TypeDefinition $cSource
 
 function Set-WindowState {
 	<#
