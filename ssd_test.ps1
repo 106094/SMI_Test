@@ -75,8 +75,9 @@ $selections=@(
 )
 }
 
-
 $options=wpfselections -selections $selections
+$timesuffix=get-date -format "_yyMMdd-HHmmss"
+$formatcsvlog=Join-Path $logfolder "$($os)_format$($timesuffix).csv"
 <#skip
 diskexploreaction -type "property" -picname "OS03-B"
 diskmgnt -type "partition_style" -picname "OS03-D"
@@ -84,7 +85,6 @@ $file1024=test-FileSizeOnDisk 1024 -index "OS06-C" #OS06-C
 $clustercheck=test_diskClusterSize -DeviceType "FLASH" -index "OS06-D" #OS06-D
 #>
 (get-process -name "ssd_test")| Set-WindowState -State MINIMIZE
-
 if($os -match "11"){
 if($options -like "*[[]1[]]*"){win11format -index "OS20Scen2_clean" -fillfile}
 if($options -like "*[[]2[]]*"){win11format -index "OS21Scen2_clean" -nonquick}
