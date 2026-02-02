@@ -1151,12 +1151,14 @@ $clickx=($coors.split(","))[0]
 $clicky=($coors.split(","))[1]
  Start-Process ms-settings:disksandvolumes
  start-sleep -s 20
-  $ws.SendKeys("{tab}")
-  start-sleep -s 1
-  $ws.SendKeys("{tab}")
-  start-sleep -s 1
-  $ws.SendKeys("% ")
-  start-sleep -s 2
+[KeySends.KeySend]::KeyDown([System.Windows.Forms.Keys]::Menu)
+ start-sleep -Milliseconds 100
+[KeySends.KeySend]::KeyDown([System.Windows.Forms.Keys]::Space)
+ start-sleep -Milliseconds 200
+[KeySends.KeySend]::KeyUp([System.Windows.Forms.Keys]::Menu)
+ start-sleep -Milliseconds 100
+[KeySends.KeySend]::KeyUp([System.Windows.Forms.Keys]::Space)
+ start-sleep -Milliseconds 200
   $ws.SendKeys("x")
   start-sleep -s 1
   1..5 | ForEach-Object {
