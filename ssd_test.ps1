@@ -110,3 +110,4 @@ $filesystem=(Get-Volume -DriveLetter $driverletter).FileSystem #OS03-C
 $diskNumber = (Get-Partition -DriveLetter $driverletter).DiskNumber
 $PartitionStyle=(Get-Disk -Number $diskNumber).PartitionStyle #OS03-E
 #>
+
