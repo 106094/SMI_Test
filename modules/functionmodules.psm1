@@ -670,8 +670,7 @@ foreach ($fs in $fileSystems) {
         foreach ($size in $clusters) {
             $results += [PSCustomObject]@{
                 FileSystem         = $fs
-                AllocationUnitSize = $size   # already in bytes
-                AllocationUnitSizeKB = "{0:0}KB" -f ($size / 1KB)
+                Support            = $size
                 skip_nofile          =""
                 skip_withfile        =""
             }
