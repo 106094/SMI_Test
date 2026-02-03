@@ -100,7 +100,6 @@ OS93
 }
 
 
-
 <#
 #get text info
 $filesystem=(Get-Volume -DriveLetter $driverletter).FileSystem #OS03-C
