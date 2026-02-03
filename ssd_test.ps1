@@ -98,6 +98,7 @@ if($options -like "*[[]4[]]*"){win11format -index "OS21scen1_file" -withfile -no
 if($options -like "*OS93*"){
 OS93
 }
+
 <#
 #get text info
 $filesystem=(Get-Volume -DriveLetter $driverletter).FileSystem #OS03-C
