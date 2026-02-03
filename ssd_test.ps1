@@ -99,15 +99,9 @@ if($options -like "*OS93*"){
 OS93
 }
 
-
-
-
-
-
 <#
 #get text info
 $filesystem=(Get-Volume -DriveLetter $driverletter).FileSystem #OS03-C
 $diskNumber = (Get-Partition -DriveLetter $driverletter).DiskNumber
 $PartitionStyle=(Get-Disk -Number $diskNumber).PartitionStyle #OS03-E
 #>
-
