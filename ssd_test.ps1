@@ -6,7 +6,6 @@ Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy Bypass -Force
   $shell=New-Object -ComObject shell.application
   $ws=New-Object -ComObject wscript.shell
 
- 
 $screen = [System.Windows.Forms.Screen]::PrimaryScreen
 $bounds = $screen.Bounds
 $screenheight=$bounds.Bottom
