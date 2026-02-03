@@ -1,10 +1,10 @@
 Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy Bypass -Force
-  Add-Type -AssemblyName System.Windows.Forms,System.Drawing,Microsoft.VisualBasic
-  Add-Type -AssemblyName UIAutomationClient
-  Add-Type -AssemblyName UIAutomationTypes
-  Add-Type -AssemblyName PresentationFramework
-  $shell=New-Object -ComObject shell.application
-  $ws=New-Object -ComObject wscript.shell
+Add-Type -AssemblyName System.Windows.Forms,System.Drawing,Microsoft.VisualBasic
+Add-Type -AssemblyName UIAutomationClient
+Add-Type -AssemblyName UIAutomationTypes
+Add-Type -AssemblyName PresentationFramework
+$shell=New-Object -ComObject shell.application
+$ws=New-Object -ComObject wscript.shell
 
 $screen = [System.Windows.Forms.Screen]::PrimaryScreen
 $bounds = $screen.Bounds
