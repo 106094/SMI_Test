@@ -21,7 +21,11 @@ LOG_DIR="$HOME/SSD_Format_Benchmark"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 RESULTS_CSV="${LOG_DIR}/benchmark_results_${TIMESTAMP}.csv"
 RESULTS_LOG="${LOG_DIR}/benchmark_log_${TIMESTAMP}.log"
-PYTHON_BIN="$(detect_python)"
+if command -v python3 >/dev/null 2>&1; then
+    PYTHON3_AVAILABLE=1
+else
+    PYTHON3_AVAILABLE=0
+fi
 
 # Create log directory
 mkdir -p "$LOG_DIR"
@@ -272,15 +276,6 @@ benchmark_format() {
     echo "$duration"
 }
 
-detect_python() {
-    if command -v python3 >/dev/null 2>&1; then
-        echo "python3"
-    elif command -v python >/dev/null 2>&1; then
-        echo "python"
-    else
-        echo ""
-    fi
-}
 
 #speed test
 Speedtest() {
@@ -289,9 +284,8 @@ Speedtest() {
     local test_file="$mount_point/test.bin"
     local size_mb=1024
     local free_mb
-
-    local write_out write_mbps
-    local read_out  read_mbps
+    local write_out write_bytes write_secs write_speed
+    local read_out  read_bytes  read_secs  read_speed
 
     [ -d "$mount_point" ] || { echo "N/A,N/A"; return 0; }
 
@@ -303,53 +297,48 @@ Speedtest() {
 
     export LC_ALL=C
 
-    # -------- WRITE --------
+    # ---------- WRITE ----------
     sync
     write_out=$(dd if=/dev/zero of="$test_file" bs=1m count="$size_mb" conv=sync 2>&1 || true)
     sync
 
-    if [[ -n "$PYTHON_BIN" ]]; then
-        write_mbps=$(
-            echo "$write_out" |
-            "$PYTHON_BIN" - <<'PY'
-import re, sys
-m = re.search(r'(\d+) bytes transferred.*?in ([0-9.]+) secs', sys.stdin.read())
-if not m or float(m.group(2)) == 0:
-    print("N/A")
-else:
-    print(f"{(int(m.group(1))/1048576)/float(m.group(2)):.2f}")
-PY
-        )
+    if (( HAS_PYTHON )); then
+        # keep original bc-based calculation
+        write_bytes=$(echo "$write_out" | awk '/bytes transferred/ {print $1}')
+        write_secs=$(echo "$write_out"  | sed -n 's/.* in \([0-9.]*\) secs.*/\1/p')
+
+        if [[ -z "$write_bytes" || -z "$write_secs" || "$write_secs" == "0" ]]; then
+            write_speed="N/A"
+        else
+            write_speed=$(echo "scale=2; ($write_bytes / 1048576) / $write_secs" | bc)
+        fi
     else
-        # fallback: parse dd's "(XXX MB/sec)"
-        write_mbps=$(echo "$write_out" | sed -n 's/.*(\([0-9.]*\) MB\/sec).*/\1/p')
-        [ -z "$write_mbps" ] && write_mbps="N/A"
+        # fallback: use dd’s native MB/sec
+        write_speed=$(echo "$write_out" | sed -n 's/.*(\([0-9.]*\) MB\/sec).*/\1/p')
+        [ -z "$write_speed" ] && write_speed="N/A"
     fi
 
-    # -------- READ --------
+    # ---------- READ ----------
     sleep 2
     read_out=$(dd if="$test_file" of=/dev/null bs=1m 2>&1 || true)
 
-    if [[ -n "$PYTHON_BIN" ]]; then
-        read_mbps=$(
-            echo "$read_out" |
-            "$PYTHON_BIN" - <<'PY'
-import re, sys
-m = re.search(r'(\d+) bytes transferred.*?in ([0-9.]+) secs', sys.stdin.read())
-if not m or float(m.group(2)) == 0:
-    print("N/A")
-else:
-    print(f"{(int(m.group(1))/1048576)/float(m.group(2)):.2f}")
-PY
-        )
+    if (( HAS_PYTHON )); then
+        read_bytes=$(echo "$read_out" | awk '/bytes transferred/ {print $1}')
+        read_secs=$(echo "$read_out"  | sed -n 's/.* in \([0-9.]*\) secs.*/\1/p')
+
+        if [[ -z "$read_bytes" || -z "$read_secs" || "$read_secs" == "0" ]]; then
+            read_speed="N/A"
+        else
+            read_speed=$(echo "scale=2; ($read_bytes / 1048576) / $read_secs" | bc)
+        fi
     else
-        read_mbps=$(echo "$read_out" | sed -n 's/.*(\([0-9.]*\) MB\/sec).*/\1/p')
-        [ -z "$read_mbps" ] && read_mbps="N/A"
+        read_speed=$(echo "$read_out" | sed -n 's/.*(\([0-9.]*\) MB\/sec).*/\1/p')
+        [ -z "$read_speed" ] && read_speed="N/A"
     fi
 
     rm -f "$test_file"
 
-    echo "${read_mbps},${write_mbps}"
+    echo "${read_speed},${write_speed}"
 }
 
 
