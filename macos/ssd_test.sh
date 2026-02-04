@@ -438,7 +438,7 @@ run_benchmark() {
         benchmark_format "$disk" "$display_name" "$filesystem" "$partition_scheme" "$current_test" "$total_tests" "$fill_status"
       
         # Run speedtest
-         echo "speed test after format start"
+         echo "speed test after format complete"
          IFS=',' read readspeed_after writespeed_after < <(Speedtest "$mount_point" after)
          echo "speed test after format read speed: ${readspeed_after}, write speed: ${writespeed_after}"
 
