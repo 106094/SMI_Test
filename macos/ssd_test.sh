@@ -424,7 +424,7 @@ run_benchmark() {
     for test_config in "${TEST_MATRIX[@]}"; do
         current_test=$((current_test + 1))
         IFS='|' read -r display_name filesystem partition_scheme <<< "$test_config"
-        print_header "Test $test_number/$total_tests: $display_name" 
+        print_header "Test $current_test/$total_tests: $display_name" 
         log_message "Starting benchmark: $display_name ($partition_scheme)"
 
         mount_point="$(mountcheck "$disk" || true)"
@@ -574,7 +574,7 @@ main_menu() {
         echo "7. Exit"
         echo ""
         
-        read -p "$(echo -e ${CYAN}Select option [1-6]: ${NC})" choice
+        read -p "$(echo -e ${CYAN}Select option [1-7]: ${NC})" choice
         echo ""
         
         case $choice in
