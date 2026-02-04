@@ -553,11 +553,12 @@ main_menu() {
         print_header "macOS SSD Format Benchmark Tool v${SCRIPT_VERSION}"
         
         echo "1. List available disks"
-        echo "2. Quick benchmark (empty disk only) + 3"
-        echo "3. 2 + Full benchmark (with filled disk)"
-        echo "4. Analyze latest results"
-        echo "5. View results directory"
-        echo "6. Exit"
+        echo "2. Quick benchmark (empty disk only)"
+        echo "3. Full benchmark (with filled disk)"
+        echo "4. 2 + 3"
+        echo "5. Analyze latest results"
+        echo "6. View results directory"
+        echo "7. Exit"
         echo ""
         
         read -p "$(echo -e ${CYAN}Select option [1-6]: ${NC})" choice
@@ -568,7 +569,31 @@ main_menu() {
                 list_disks
                 read -p "Press Enter to continue..."
                 ;;
-            2|3)
+            2)
+                list_disks
+                read -p "Enter disk number (e.g., 2 for /dev/disk2): " disk_num
+                local disk=$(get_disk_identifier "$disk_num")
+                
+                if [ -z "$disk" ]; then
+                    print_message "$RED" "Invalid disk identifier"
+                else
+                    quick_benchmark "$disk"
+                fi
+                read -p "Press Enter to continue..."
+                ;;
+            3)
+                list_disks
+                read -p "Enter disk number (e.g., 2 for /dev/disk2): " disk_num
+                local disk=$(get_disk_identifier "$disk_num")
+                
+                if [ -z "$disk" ]; then
+                    print_message "$RED" "Invalid disk identifier"
+                else
+                    full_benchmark "$disk"
+                fi
+                read -p "Press Enter to continue..."
+                ;;
+            4)
                 list_disks
                 read -p "Enter disk number (e.g., 2 for /dev/disk2): " disk_num
                 local disk=$(get_disk_identifier "$disk_num")
@@ -581,17 +606,17 @@ main_menu() {
                 fi
                 read -p "Press Enter to continue..."
                 ;;
-            4)
+            5)
                 analyze_results
                 read -p "Press Enter to continue..."
                 ;;
-            5)
-                print_message "$CYAN" "Results directory: $LOG_DIR"
+            6)
+               print_message "$CYAN" "Results directory: $LOG_DIR"
                 ls -lh "$LOG_DIR"
                 echo ""
                 read -p "Press Enter to continue..."
                 ;;
-            6)
+            7)
                 print_message "$GREEN" "Exiting..."
                 exit 0
                 ;;
