@@ -21,11 +21,6 @@ LOG_DIR="$HOME/SSD_Format_Benchmark"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 RESULTS_CSV="${LOG_DIR}/benchmark_results_${TIMESTAMP}.csv"
 RESULTS_LOG="${LOG_DIR}/benchmark_log_${TIMESTAMP}.log"
-if command -v python3 >/dev/null 2>&1; then
-    PYTHON3_AVAILABLE=1
-else
-    PYTHON3_AVAILABLE=0
-fi
 
 # Create log directory
 mkdir -p "$LOG_DIR"
@@ -112,13 +107,12 @@ list_disks() {
 reset_disk_hfs_gpt() {
     local disk="$1"
 
-    print_message "$YELLOW" "No mount point detected. Resetting $disk to HFS+ (GPT)..."
+    print_message "$YELLOW" "Initializing...Resetting $disk to HFS+ (GPT)..."
 
     diskutil unmountDisk "$disk" >/dev/null 2>&1 || true
     sleep 2
 
     diskutil eraseDisk JHFS+ BENCH GPT "$disk" 2>&1 | tee -a "$RESULTS_LOG"
-
     # wait for mount
     local timeout=15
     while (( timeout > 0 )); do
@@ -211,9 +205,7 @@ benchmark_format() {
     local fill_before=$7
     local extra_args=""
     local TEST_PW="password123"
-
-    print_header "Test $test_number/$total_tests: $format_name" 
-    log_message "Starting benchmark: $format_name ($partition_scheme)"
+    local timing_method start_time get_end_time end_time duration
     
     # Unmount disk
     diskutil unmountDisk "$disk" 2>/dev/null || true
@@ -223,7 +215,6 @@ benchmark_format() {
     print_message "$YELLOW" "Formatting with: $filesystem ($partition_scheme)..."
     print_message "$CYAN" "Fill before format: $([ "$fill_before" = "yes" ] && echo "YES" || echo "NO")"
     
-
     if [[ "$format_name" =~ [Ee]ncrypted ]]; then
         extra_args="-passphrase $TEST_PW"
         if [[ "$filesystem" == "JHFS+" ]]; then filesystem="JHFS+X"; fi
@@ -239,17 +230,30 @@ benchmark_format() {
 
 
     print_message "$YELLOW" "Formatting with: $filesystem ($partition_scheme)..."
-    local start_time=$(python3 -c 'import time; print(time.time())')
+
+    if command -v python3 >/dev/null 2>&1 && python3 -c 'import time; print(time.time())' >/dev/null 2>&1; then
+        timing_method="python3"
+        start_time=$(python3 -c 'import time; print(time.time())')
+        end_time_cmd="python3 -c 'import time; print(time.time())'"
+    else
+        timing_method="date"
+        start_time=$(date +%s.%N 2>/dev/null || date +%s)
+        end_time_cmd="date +%s.%N 2>/dev/null || date +%s"
+    fi
 
     diskutil eraseDisk "$filesystem" "BENCH" $extra_args "$scheme_cmd" "$disk" 2>&1 | tee -a "$RESULTS_LOG"
     
-    local end_time=$(python3 -c 'import time; print(time.time())')
-    duration=$(echo "$end_time - $start_time" | bc | xargs printf "%.1f")
+    if [[ "$timing_method" == "python3" ]]; then
+        duration=$(echo "$end_time - $start_time" | bc | xargs printf "%.1f")
+    elif [[ "$start_time" == *.* ]]; then
+        duration=$(echo "scale=1; $end_time - $start_time" | bc)
+    else
+        duration=$(( ${end_time%%.*} - ${start_time%%.*} ))
+    fi
 
-    print_message "$GREEN" "✓ Format completed in ${duration} seconds"
+   print_message "$GREEN" "✓ Format completed in ${duration} seconds (${timing_method})"              
     
     # Wait for mount
-    
     print_message "$CYAN" "Waiting for volume to mount..."
     local timeout=10
     local mounted=false
@@ -281,7 +285,7 @@ benchmark_format() {
 Speedtest() {
     local mount_point="$1"
     local phase="$2"
-    local test_file="$mount_point/test.bin"
+    local test_file
     local size_mb=1024
     local free_mb
     local write_out write_bytes write_secs write_speed
@@ -296,45 +300,29 @@ Speedtest() {
     fi
 
     export LC_ALL=C
-
+    test_file="$mount_point/test.bin"
     # ---------- WRITE ----------
     sync
     write_out=$(dd if=/dev/zero of="$test_file" bs=1m count="$size_mb" conv=sync 2>&1 || true)
     sync
+    write_speed=$(echo "$write_out" | awk '
+        /[0-9.]+\s*GB\/s/ {print $1 * 1024; exit}
+        /[0-9.]+\s*MB\/s/ {print $1; exit}
+        /\([0-9]+ bytes\/sec\)/ {match($0,/\(([0-9]+)/); print substr($0,RSTART+1,RLENGTH-1)/1048576; exit}
+    ' | tail -n 1)
 
-    if (( HAS_PYTHON )); then
-        # keep original bc-based calculation
-        write_bytes=$(echo "$write_out" | awk '/bytes transferred/ {print $1}')
-        write_secs=$(echo "$write_out"  | sed -n 's/.* in \([0-9.]*\) secs.*/\1/p')
-
-        if [[ -z "$write_bytes" || -z "$write_secs" || "$write_secs" == "0" ]]; then
-            write_speed="N/A"
-        else
-            write_speed=$(echo "scale=2; ($write_bytes / 1048576) / $write_secs" | bc)
-        fi
-    else
-        # fallback: use dd’s native MB/sec
-        write_speed=$(echo "$write_out" | sed -n 's/.*(\([0-9.]*\) MB\/sec).*/\1/p')
-        [ -z "$write_speed" ] && write_speed="N/A"
-    fi
+    [ -z "$write_speed_mb" ] && write_speed_mb="0"
 
     # ---------- READ ----------
     sleep 2
     read_out=$(dd if="$test_file" of=/dev/null bs=1m 2>&1 || true)
+    read_speed=$(echo "$read_out" | awk '
+        /[0-9.]+\s*GB\/s/ {print $1 * 1024; exit}
+        /[0-9.]+\s*MB\/s/ {print $1; exit}
+        /\([0-9]+ bytes\/sec\)/ {match($0,/\(([0-9]+)/); print substr($0,RSTART+1,RLENGTH-1)/1048576; exit}
+    ' | tail -n 1)
 
-    if (( HAS_PYTHON )); then
-        read_bytes=$(echo "$read_out" | awk '/bytes transferred/ {print $1}')
-        read_secs=$(echo "$read_out"  | sed -n 's/.* in \([0-9.]*\) secs.*/\1/p')
-
-        if [[ -z "$read_bytes" || -z "$read_secs" || "$read_secs" == "0" ]]; then
-            read_speed="N/A"
-        else
-            read_speed=$(echo "scale=2; ($read_bytes / 1048576) / $read_secs" | bc)
-        fi
-    else
-        read_speed=$(echo "$read_out" | sed -n 's/.*(\([0-9.]*\) MB\/sec).*/\1/p')
-        [ -z "$read_speed" ] && read_speed="N/A"
-    fi
+    [ -z "$write_speed_mb" ] && write_speed_mb="0"
 
     rm -f "$test_file"
 
@@ -430,13 +418,14 @@ run_benchmark() {
       reset_disk_hfs_gpt "$disk"|| true
 
     # Initialize CSV
-    echo "Test_Number,Format_Name,Filesystem,Partition_Scheme,Filled_Before,Duration_Seconds,ReadSpeed_before,WriteSpeed_before,Readspeed_after,Writespeed_after,Timestamp" > "$RESULTS_CSV"
+    echo "Test_Number,Format_Name,Filesystem,Partition_Scheme,Filled_Before,Duration(sec),ReadSpeed_before(MB/s),WriteSpeed_before(MB/s),Readspeed_after(MB/s),Writespeed_after(MB/s),Timestamp" > "$RESULTS_CSV"
 
     # Run tests
     for test_config in "${TEST_MATRIX[@]}"; do
         current_test=$((current_test + 1))
-        
         IFS='|' read -r display_name filesystem partition_scheme <<< "$test_config"
+        print_header "Test $test_number/$total_tests: $display_name" 
+        log_message "Starting benchmark: $display_name ($partition_scheme)"
 
         mount_point="$(mountcheck "$disk" || true)"
         echo "mount point: $mount_point"
@@ -456,17 +445,17 @@ run_benchmark() {
         fi
 
         # Run speedtest before
-          echo "speed test before format start"
+          print_message "$BLUE" "speed test before format ... waiting..."
           IFS=',' read readspeed_before writespeed_before < <(Speedtest "$mount_point" before)
-          echo "speed test before format read speed: ${readspeed_before}, write speed: ${writespeed_before}"
+          print_message "$GREEN" "(before) read speed: ${readspeed_before}, write speed: ${writespeed_before}"
 
         # Run benchmark
         benchmark_format "$disk" "$display_name" "$filesystem" "$partition_scheme" "$current_test" "$total_tests" "$fill_status"
       
         # Run speedtest
-         echo "speed test after format complete"
+         print_message "$BLUE" "speed test after format ... waiting..."
          IFS=',' read readspeed_after writespeed_after < <(Speedtest "$mount_point" after)
-         echo "speed test after format read speed: ${readspeed_after}, write speed: ${writespeed_after}"
+         print_message "$GREEN"  "(after) read speed: ${readspeed_after}, write speed: ${writespeed_after}"
 
         # Add to CSV
         echo "$current_test,\"$display_name\",$filesystem,$partition_scheme,$fill_status,$duration,$readspeed_before,$writespeed_before,$readspeed_after,$writespeed_after,$(date '+%Y-%m-%d %H:%M:%S')" >> "$RESULTS_CSV"
@@ -507,8 +496,7 @@ run_benchmark() {
 
 # Quick benchmark (empty disk only)
 quick_benchmark() {
-    local disk=$1
-    
+    local disk=$1    
     print_header "Quick Benchmark (Empty Disk Only)"
     run_benchmark "$disk" "no"
 }
@@ -516,7 +504,6 @@ quick_benchmark() {
 # Full benchmark (with filled disk)
 full_benchmark() {
     local disk=$1
-    
     print_header "Full Benchmark (With Filled Disk)"
     run_benchmark "$disk" "yes"
 }
