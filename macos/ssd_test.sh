@@ -103,6 +103,36 @@ list_disks() {
     done
 }
 
+#reset mountable format
+reset_disk_hfs_gpt() {
+    local disk="$1"
+
+    print_message "$YELLOW" "No mount point detected. Resetting $disk to HFS+ (GPT)..."
+
+    diskutil unmountDisk "$disk" >/dev/null 2>&1 || true
+    sleep 2
+
+    diskutil eraseDisk JHFS+ BENCH GPT "$disk" 2>&1 | tee -a "$RESULTS_LOG"
+
+    # wait for mount
+    local timeout=15
+    while (( timeout > 0 )); do
+        local mp
+        mp="$(mountcheck "$disk" || true)"
+       if [[ -n "$mp" && -d "$mp" ]]; then
+            print_message "$GREEN" "✓ Disk recovered at $mp"
+            echo "$mp"
+            return 0
+        fi
+        sleep 1
+        ((timeout--))
+    done
+
+    print_message "$RED" "Failed to recover disk $disk"
+    return 1
+}
+
+
 # Fill disk to capacity
 fill_disk() {
     local disk=$1
@@ -122,11 +152,12 @@ fill_disk() {
     
     print_message "$BLUE" "Available space: ${available_gb} GB"
     
-    # Fill to 95% to avoid filesystem issues
-    local target_bytes=$(echo "$available_bytes * 0.95" | bc | cut -d'.' -f1)
+    # leave 2GB free instead of 5%
+    local reserve_bytes=$((2 * 1024 * 1024 * 1024))
+    local target_bytes=$((available_bytes - reserve_bytes))
     local target_gb=$(echo "scale=2; $target_bytes / 1073741824" | bc)
     
-    print_message "$YELLOW" "Filling ${target_gb} GB (95% of capacity)..."
+    print_message "$YELLOW" "Filling ${target_gb} GB (2GB left for speed test)..."
     
     local fill_dir="${mount_point}/FILL"
     mkdir -p "$fill_dir"
@@ -205,7 +236,7 @@ benchmark_format() {
     print_message "$YELLOW" "Formatting with: $filesystem ($partition_scheme)..."
     local start_time=$(python3 -c 'import time; print(time.time())')
 
-    diskutil eraseDisk "$filesystem" "DATA" $extra_args "$scheme_cmd" "$disk" 2>&1 | tee -a "$RESULTS_LOG"
+    diskutil eraseDisk "$filesystem" "BENCH" $extra_args "$scheme_cmd" "$disk" 2>&1 | tee -a "$RESULTS_LOG"
     
     local end_time=$(python3 -c 'import time; print(time.time())')
     duration=$(echo "$end_time - $start_time" | bc | xargs printf "%.1f")
@@ -219,7 +250,7 @@ benchmark_format() {
     local mounted=false
     while [ $timeout -gt 0 ]; do
         # Check for mount point anywhere on the parent disk's children
-        mount_point=$(diskutil list "$disk" | grep -o '/Volumes/[^ ]*' | head -n 1 | xargs)
+          mount_point="$(mountcheck "$disk" || true)"
         if [ -n "$mount_point" ] && [ -d "$mount_point" ]; then
             mounted=true
             break
@@ -229,7 +260,7 @@ benchmark_format() {
     done
 
     if [ "$mounted" = false ]; then
-        mount_point="/Volumes/DATA" # Fallback guess
+        mount_point="/Volumes/BENCH" # Fallback guess
     fi
     
     log_message "Format completed: $format_name - Mount: $mount_point - Duration: ${duration}s"
@@ -247,41 +278,65 @@ Speedtest() {
     local phase="$2"
     local test_file="$mount_point/test.bin"
     local size_mb=1024
+    local free_mb
 
-    local write_out write_speed
-    local read_out read_speed
+    local write_out write_bytes write_secs write_mbps
+    local read_out  read_bytes read_secs read_mbps
 
-    [ -d "$mount_point" ] || return 1
+    [ -d "$mount_point" ] || { echo "N/A,N/A"; return 0; }
+
+    free_mb=$(df -m "$mount_point" | tail -1 | awk '{print $4}')
+    if (( free_mb < size_mb )); then
+        echo "DISK_FULL,DISK_FULL"
+        return 0
+    fi
+    export LC_ALL=C
 
     sync
     write_out=$(dd if=/dev/zero of="$test_file" bs=1m count="$size_mb" conv=sync 2>&1 || true)
     sync
-
-    write_speed=$(echo "$write_out" | awk -F'[()]' '{print $2}')
-
+    write_bytes=$(echo "$write_out" | awk '/bytes transferred/ {print $1}')
+    write_secs=$(echo "$write_out"  | sed -n 's/.* in \([0-9.]*\) secs.*/\1/p')
+    if [[ -z "$write_bytes" || -z "$write_secs" || "$write_secs" == "0" ]]; then
+        write_mbps="N/A"
+    else
+        write_mbps=$(echo "scale=2; ($write_bytes / 1048576) / $write_secs" | bc)
+    fi
     sleep 2
     read_out=$(dd if="$test_file" of=/dev/null bs=1m 2>&1 || true)
-    read_speed=$(echo "$read_out" | awk -F'[()]' '{print $2}')
+    read_bytes=$(echo "$read_out" | awk '/bytes transferred/ {print $1}')
+    read_secs=$(echo "$read_out"  | sed -n 's/.* in \([0-9.]*\) secs.*/\1/p')
+    if [[ -z "$read_bytes" || -z "$read_secs" || "$read_secs" == "0" ]]; then
+        read_mbps="N/A"
+    else
+        read_mbps=$(echo "scale=2; ($read_bytes / 1048576) / $read_secs" | bc)
+    fi
 
     rm -f "$test_file"
 
-    echo "$read_speed,$write_speed"
+    echo "${read_mbps},${write_mbps}"
 }
 
 #mount check
-mountcheck(){
-  local disk = "$1"
+mountcheck() {
+  local disk="$1"
   local found_mount=""
-        for i in 1 2; do
-           slice="${disk}s$i"
-            mp=$(diskutil info -plist "$slice" 2>/dev/null | plutil -extract MountPoint raw - 2>/dev/null)
-             if [[ -n "$mp" && -d "$mp" ]]; then
-               found_mount="$mp"
-               mount_point=$(echo "$found_mount" | sed -E 's/ [0-9]+$//')
-              break
-            fi
-          done
-   echo "mount point: $mount_point"
+  local mp=""
+
+  for i in 1 2; do
+    local slice="${disk}s$i"
+
+    found_mount=$(diskutil info -plist "$slice" 2>/dev/null | \
+                  plutil -extract MountPoint raw - 2>/dev/null)
+
+    if [[ -n "$found_mount" && -d "$found_mount" ]]; then
+      mp="${found_mount% [0-9]*}"
+      echo "$mp"
+      return 0
+    fi
+  done
+
+  return 1
 }
 
 # Main benchmark execution
@@ -344,7 +399,10 @@ run_benchmark() {
     
     local total_tests=${#TEST_MATRIX[@]}
     local current_test=0
-    
+
+      # Initialize disk
+      reset_disk_hfs_gpt "$disk"|| true
+
     # Initialize CSV
     echo "Test_Number,Format_Name,Filesystem,Partition_Scheme,Filled_Before,Duration_Seconds,ReadSpeed_before,WriteSpeed_before,Readspeed_after,Writespeed_after,Timestamp" > "$RESULTS_CSV"
 
@@ -354,16 +412,13 @@ run_benchmark() {
         
         IFS='|' read -r display_name filesystem partition_scheme <<< "$test_config"
 
-        mountcheck $disk
+        mount_point="$(mountcheck "$disk" || true)"
+        echo "mount point: $mount_point"
 
-
-        if [ "$fill_before_format" = "yes" ] && [ $current_test -gt 1 ]; then
+        fill_status="no"
+         if [ "$fill_before_format" = "yes" ] && [ $current_test -gt 1 ]; then
           fill_status="yes"
-        fi
-
-        # Fill disk if requested
-        if [ "$fill_before_format" = "yes" ] ; then
-            if [ -d "$mount_point" ]; then
+            if [ -n "$mount_point" ] && [ -d "$mount_point" ]; then
              echo "fill disk start"
                sleep 5
                fill_disk "$disk" "$mount_point"
@@ -375,33 +430,27 @@ run_benchmark() {
         fi
 
         # Run speedtest before
-        if [ ! -d "$mount_point" ]; then
-           print_message "$YELLOW" "APM volume did not mount; skipping speed test"
-           readspeed_before="N/A"
-           writespeed_before="N/A"
-        else
           echo "speed test before format start"
           IFS=',' read readspeed_before writespeed_before < <(Speedtest "$mount_point" before)
           echo "speed test before format read speed: ${readspeed_before}, write speed: ${writespeed_before}"
-       fi
 
         # Run benchmark
         benchmark_format "$disk" "$display_name" "$filesystem" "$partition_scheme" "$current_test" "$total_tests" "$fill_status"
       
         # Run speedtest
-        if [[ "$partition_scheme" == "APM" && ! -d "$mount_point" ]]; then
-           print_message "$YELLOW" "APM volume did not mount; skipping speed test"
-           readspeed_after="N/A"
-           writespeed_after="N/A"
-        else
-         echo "speed test before format start"
-         IFS=',' read readspeed_after writespeed_after < <(Speedtest "$mount_point" before)
+         echo "speed test after format start"
+         IFS=',' read readspeed_after writespeed_after < <(Speedtest "$mount_point" after)
          echo "speed test after format read speed: ${readspeed_after}, write speed: ${writespeed_after}"
-        fi
 
         # Add to CSV
         echo "$current_test,\"$display_name\",$filesystem,$partition_scheme,$fill_status,$duration,$readspeed_before,$writespeed_before,$readspeed_after,$writespeed_after,$(date '+%Y-%m-%d %H:%M:%S')" >> "$RESULTS_CSV"
 
+
+        mount_point="$(mountcheck "$disk" || true)"
+        if [[ -z "$mount_point" ]]; then
+          reset_disk_hfs_gpt "$disk"|| true
+        fi
+        
         # Pause between tests
         sleep 3
     done
@@ -504,8 +553,8 @@ main_menu() {
         print_header "macOS SSD Format Benchmark Tool v${SCRIPT_VERSION}"
         
         echo "1. List available disks"
-        echo "2. Quick benchmark (empty disk only)"
-        echo "3. Full benchmark (with filled disk)"
+        echo "2. Quick benchmark (empty disk only) + 3"
+        echo "3. 2 + Full benchmark (with filled disk)"
         echo "4. Analyze latest results"
         echo "5. View results directory"
         echo "6. Exit"
@@ -519,7 +568,7 @@ main_menu() {
                 list_disks
                 read -p "Press Enter to continue..."
                 ;;
-            2)
+            2|3)
                 list_disks
                 read -p "Enter disk number (e.g., 2 for /dev/disk2): " disk_num
                 local disk=$(get_disk_identifier "$disk_num")
@@ -528,17 +577,6 @@ main_menu() {
                     print_message "$RED" "Invalid disk identifier"
                 else
                     quick_benchmark "$disk"
-                fi
-                read -p "Press Enter to continue..."
-                ;;
-            3)
-                list_disks
-                read -p "Enter disk number (e.g., 2 for /dev/disk2): " disk_num
-                local disk=$(get_disk_identifier "$disk_num")
-                
-                if [ -z "$disk" ]; then
-                    print_message "$RED" "Invalid disk identifier"
-                else
                     full_benchmark "$disk"
                 fi
                 read -p "Press Enter to continue..."
