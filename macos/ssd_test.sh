@@ -351,8 +351,8 @@ mountcheck() {
   for i in 1 2; do
     local slice="${disk}s$i"
 
-    found_mount=$(diskutil info -plist "$slice" 2>/dev/null | \
-                  plutil -extract MountPoint raw - 2>/dev/null)
+    found_mount=$(diskutil info "$slice" | awk -F': ' '/Mount Point/ {print $2}' | xargs)
+
 
     if [[ -n "$found_mount" && -d "$found_mount" ]]; then
       mp="${found_mount% [0-9]*}"
@@ -363,6 +363,7 @@ mountcheck() {
 
   return 1
 }
+
 
 # Main benchmark execution
 run_benchmark() {
