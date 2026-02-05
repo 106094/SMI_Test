@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
+#!/bin/bash
 set -euo pipefail
-
+set +x
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -34,7 +35,7 @@ fi
 
 log_message() {
     local message=$1
-    local color=$2
+    local color="${2:-$NC}"
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] $message" >> "$RESULTS_LOG"
     echo -e "${color}${message}${NC}"
 }
@@ -82,14 +83,17 @@ mount_ufd() {
   mount_point=""
   for i in {1..5}; do
     slice="${disk}s$i"
-    mp=$(diskutil info "$slice" 2>/dev/null | awk -F': ' '/Mount Point/ {print $2}' | xargs)
+     if ! info=$(diskutil info "$slice" 2>/dev/null); then
+        continue
+      fi
+      mp=$(echo "$info" | awk -F': ' '/Mount Point/ {print $2}' | xargs)
     if [[ -n "$mp" && -d "$mp" ]]; then
       mount_point="${mp% [0-9]*}"
       break
     fi
   done
 
-  [[ -z "$mount_point" ]] && { log_message "ERROR: Mount point not found"; exit 1; }
+  [[ -z "$mount_point" ]] && { log_message "ERROR: Mount point not found" "$RED"; exit 1; }
   log_message "Mounted at: $mount_point" "$GREEN"
 }
 
@@ -114,7 +118,7 @@ get_effective_test_bytes() {
   host_usable_bytes=$((host_free_bytes - reserve_bytes))
 
   (( host_usable_bytes <= 0 )) && {
-    log_message "$RED" "ERROR: Host free space < ${RESERVE_GB}GB"
+    log_message "ERROR: Host free space < ${RESERVE_GB}GB" "$RED" 
     exit 1
   }
 
@@ -369,14 +373,14 @@ main() {
   # Run speedtest before
   log_message "speed test before write ... waiting..." "$BLUE" 
   IFS=',' read readspeed writespeed < <(Speedtest "$mount_point")
-  print_message "(before) read speed: ${readspeed}, write speed: ${writespeed}" "$YELLOW" 
+  log_message"(before) read speed: ${readspeed}, write speed: ${writespeed}" "$YELLOW" 
 
   parallel_write_50pct
   
   # Run speedtest after
   log_message "speed test after write ... waiting..." "$BLUE" 
   IFS=',' read readspeed writespeed < <(Speedtest "$mount_point")
-  print_message "(after) read speed: ${readspeed}, write speed: ${writespeed}" "$YELLOW" 
+  log_message"(after) read speed: ${readspeed}, write speed: ${writespeed}" "$YELLOW" 
 
   self_rw_parallel
   compare_internal_data
@@ -391,14 +395,14 @@ main() {
   # Run speedtest before
   log_message "speed test before write ... waiting..." "$BLUE" 
   IFS=',' read readspeed writespeed < <(Speedtest "$mount_point")
-  print_message "(before) read speed: ${readspeed}, write speed: ${writespeed}" "$YELLOW" 
+  log_message "(before) read speed: ${readspeed}, write speed: ${writespeed}" "$YELLOW" 
 
   seq_write_test
 
   # Run speedtest after
   log_message "speed test after write ... waiting..." "$BLUE" 
   IFS=',' read readspeed writespeed < <(Speedtest "$mount_point")
-  print_message "$GREEN" "(after) read speed: ${readspeed}, write speed: ${writespeed}"
+  log_message "$GREEN" "(after) read speed: ${readspeed}, write speed: ${writespeed}"
 
   verify_full_and_negative
   seq_read_test
