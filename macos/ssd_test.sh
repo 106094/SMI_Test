@@ -205,7 +205,7 @@ benchmark_format() {
     local fill_before=$7
     local extra_args=""
     local TEST_PW="password123"
-    local timing_method start_time get_end_time end_time duration
+    local timing_method start_time end_time
     
     # Unmount disk
     diskutil unmountDisk "$disk" 2>/dev/null || true
@@ -230,20 +230,16 @@ benchmark_format() {
 
 
     print_message "$YELLOW" "Formatting with: $filesystem ($partition_scheme)..."
-
+    start_time=$(date +%s.%N 2>/dev/null || date +%s)
     if command -v python3 >/dev/null 2>&1 && python3 -c 'import time; print(time.time())' >/dev/null 2>&1; then
         timing_method="python3"
         start_time=$(python3 -c 'import time; print(time.time())')
-        end_time_cmd="python3 -c 'import time; print(time.time())'"
-    else
-        timing_method="date"
-        start_time=$(date +%s.%N 2>/dev/null || date +%s)
-        end_time_cmd="date +%s.%N 2>/dev/null || date +%s"
     fi
 
     diskutil eraseDisk "$filesystem" "BENCH" $extra_args "$scheme_cmd" "$disk" 2>&1 | tee -a "$RESULTS_LOG"
-    
+    end_time=$(date +%s.%N 2>/dev/null || date +%s)
     if [[ "$timing_method" == "python3" ]]; then
+        end_time=$(python3 -c 'import time; print(time.time())')
         duration=$(echo "$end_time - $start_time" | bc | xargs printf "%.1f")
     elif [[ "$start_time" == *.* ]]; then
         duration=$(echo "scale=1; $end_time - $start_time" | bc)
@@ -251,7 +247,7 @@ benchmark_format() {
         duration=$(( ${end_time%%.*} - ${start_time%%.*} ))
     fi
 
-   print_message "$GREEN" "✓ Format completed in ${duration} seconds (${timing_method})"              
+   print_message "$GREEN" "✓ Format completed in ${duration} seconds"              
     
     # Wait for mount
     print_message "$CYAN" "Waiting for volume to mount..."
@@ -339,8 +335,7 @@ mountcheck() {
   for i in 1 2; do
     local slice="${disk}s$i"
 
-    found_mount=$(diskutil info "$slice" | awk -F': ' '/Mount Point/ {print $2}' | xargs)
-
+    found_mount=$(diskutil info "$slice" 2>/dev/null | awk -F': ' '/Mount Point/ {print $2}' | xargs)
 
     if [[ -n "$found_mount" && -d "$found_mount" ]]; then
       mp="${found_mount% [0-9]*}"
@@ -424,6 +419,11 @@ run_benchmark() {
     for test_config in "${TEST_MATRIX[@]}"; do
         current_test=$((current_test + 1))
         IFS='|' read -r display_name filesystem partition_scheme <<< "$test_config"
+      if (( current_test <= SKIP_N )); then
+         print_message "$CYAN" "Skipping test #$current_test: $display_name"
+         continue
+      fi
+
         print_header "Test $current_test/$total_tests: $display_name" 
         log_message "Starting benchmark: $display_name ($partition_scheme)"
 
@@ -586,7 +586,8 @@ main_menu() {
                 list_disks
                 read -p "Enter disk number (e.g., 2 for /dev/disk2): " disk_num
                 local disk=$(get_disk_identifier "$disk_num")
-                
+                read -p "Skip first N test conditions (0 = none): " SKIP_N
+                SKIP_N=${SKIP_N:-0}
                 if [ -z "$disk" ]; then
                     print_message "$RED" "Invalid disk identifier"
                 else
@@ -598,7 +599,8 @@ main_menu() {
                 list_disks
                 read -p "Enter disk number (e.g., 2 for /dev/disk2): " disk_num
                 local disk=$(get_disk_identifier "$disk_num")
-                
+                read -p "Skip first N test conditions (0 = none): " SKIP_N
+                SKIP_N=${SKIP_N:-0}
                 if [ -z "$disk" ]; then
                     print_message "$RED" "Invalid disk identifier"
                 else
@@ -610,7 +612,6 @@ main_menu() {
                 list_disks
                 read -p "Enter disk number (e.g., 2 for /dev/disk2): " disk_num
                 local disk=$(get_disk_identifier "$disk_num")
-                
                 if [ -z "$disk" ]; then
                     print_message "$RED" "Invalid disk identifier"
                 else
