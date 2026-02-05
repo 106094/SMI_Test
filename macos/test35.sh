@@ -14,9 +14,13 @@ RESERVE_GB=10
 UFD_CAP_GB=100
 SEQ_SRC="$HOME/ufd_src"
 MIX_SRC="$HOME/ufd_mix_src"
-UFD_DST="$mount_point/ufd_dst"
-UFD_DSTCP="$mount_point/ufd_dst2"
 READBACK_DST="$HOME/ufd_readback"
+
+LOG_DIR="$HOME/SSD_Format_Benchmark"
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+RESULTS_LOG="${LOG_DIR}/OS3538MAC_log_${TIMESTAMP}.log"
+
+
 if command -v python3 >/dev/null 2>&1; then
   TIMING_MODE="python"
 else
@@ -36,7 +40,7 @@ log_message() {
 }
 
 now() {
-  if command -v python3 >/dev/null 2>&1; then
+  if [[ "$TIMING_MODE" == "python" ]]; then
     python3 - <<EOF
 import time
 print(time.time())
@@ -58,7 +62,8 @@ calc_speed() {
   if [[ "$TIMING_MODE" == "python" ]]; then
     python3 -c "print(round($1 / $2, 1))"
   else
-     echo "scale=1; $1 / $2" | bc
+    command -v bc >/dev/null 2>&1 || { echo "N/A"; return; }
+    echo "scale=1; $1 / $2" | bc
   fi
 }
 
@@ -165,8 +170,8 @@ seq_write_test() {
 # ==========================================================
 verify_limit_and_negative() {
   # --- verify written size ---
-  written_bytes=$(du -sk "$mount_point/$(basename "$SEQ_SRC")" | awk '{print $1 * 1024}')
-  expected_bytes=$test_bytes
+  written_bytes=$(du -sk "$UFD_DST" | awk '{print $1 * 1024}')
+  IFS='|' read -r expected_bytes _ <<< "$(get_effective_test_bytes)"
 
   if (( written_bytes < expected_bytes * 95 / 100 )); then
     log_message "ERROR: Written data size too small" "$RED" 
@@ -254,7 +259,7 @@ prepare_mixed_50pct() {
   mix_bytes=$((base_bytes / 2))
   mix_mb=$((mix_bytes / 1024 / 1024))
 
-  log_message "$BLUE" "Mixed workload size: $((mix_mb / 1024)) GB (50% of $base_reason)"
+  log_message "Mixed workload size: $((mix_mb / 1024)) GB (50% of $base_reason)" "$BLUE" 
 
   # 80% large, 20% small
   large_mb=$((mix_mb * 8 / 10))
@@ -300,8 +305,8 @@ self_rw_parallel() {
 
 compare_internal_data() {
   log_message "Comparing self-copied data"
-  cmp "$mount_point/large.bin" "$mount_point/self_copy/large.bin"
-  diff -qr "$mount_point/small" "$mount_point/self_copy/small"
+  cmp "$mount_point/large.bin" "$UFD_DSTCP/large.bin"
+  diff -qr "$mount_point/small" "$UFD_DSTCP/small"
   log_message "Data compare: PASS"
 }
 
@@ -331,8 +336,6 @@ Speedtest() {
         /\([0-9]+ bytes\/sec\)/ {match($0,/\(([0-9]+)/); print substr($0,RSTART+1,RLENGTH-1)/1048576; exit}
     ' | tail -n 1)
 
-    [ -z "$write_speed_mb" ] && write_speed_mb="0"
-
     # ---------- READ ----------
     sleep 2
     read_out=$(dd if="$test_file" of=/dev/null bs=1m 2>&1 || true)
@@ -342,7 +345,8 @@ Speedtest() {
         /\([0-9]+ bytes\/sec\)/ {match($0,/\(([0-9]+)/); print substr($0,RSTART+1,RLENGTH-1)/1048576; exit}
     ' | tail -n 1)
 
-    [ -z "$write_speed_mb" ] && write_speed_mb="0"
+    [ -z "$write_speed" ] && write_speed="0"
+    [ -z "$read_speed" ] && read_speed="0"
 
     rm -f "$test_file"
 
@@ -357,21 +361,22 @@ main() {
 
   detect_ufd
   mount_ufd
-
+  UFD_DST="$mount_point/ufd_dst"
+  UFD_DSTCP="$mount_point/ufd_dst2"
   # Parallel + Self R/W sub-test
   log_message "===== Parallel + Self R/W Sub-Test START ====="
   prepare_mixed_50pct
   # Run speedtest before
   log_message "speed test before write ... waiting..." "$BLUE" 
   IFS=',' read readspeed writespeed < <(Speedtest "$mount_point")
-  print_message "$GREEN" "(before) read speed: ${readspeed}, write speed: ${writespeed}"
+  print_message "(before) read speed: ${readspeed}, write speed: ${writespeed}" "$YELLOW" 
 
   parallel_write_50pct
   
   # Run speedtest after
   log_message "speed test after write ... waiting..." "$BLUE" 
   IFS=',' read readspeed writespeed < <(Speedtest "$mount_point")
-  print_message "$GREEN" "(after) read speed: ${readspeed}, write speed: ${writespeed}"
+  print_message "(after) read speed: ${readspeed}, write speed: ${writespeed}" "$YELLOW" 
 
   self_rw_parallel
   compare_internal_data
@@ -386,7 +391,7 @@ main() {
   # Run speedtest before
   log_message "speed test before write ... waiting..." "$BLUE" 
   IFS=',' read readspeed writespeed < <(Speedtest "$mount_point")
-  print_message "$GREEN" "(before) read speed: ${readspeed}, write speed: ${writespeed}"
+  print_message "(before) read speed: ${readspeed}, write speed: ${writespeed}" "$YELLOW" 
 
   seq_write_test
 
