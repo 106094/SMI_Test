@@ -16,7 +16,11 @@ function getusbinfo([string]$filepath){
 function diskexploropen([string]$openpath,[switch]$disk){
 Start-Process explorer.exe -ArgumentList $openpath -WindowStyle Maximized
 start-sleep -s 20
-[Clicker]::LeftClickAtPoint($screenwidth/2, $screenheight/2)
+$screenWidth = (Get-CimInstance Win32_VideoController).CurrentHorizontalResolution
+$screenHeight = (Get-CimInstance Win32_VideoController).CurrentVerticalResolution
+$centerX = [int]($screenWidth / 2)
+$centerY = [int]($screenHeight / 2)
+[Clicker]::LeftClickAtPoint($centerX, $centerY)
 start-sleep -s 1
 $ws.SendKeys("^+7") #Tiles view
 start-sleep -s 1
@@ -945,9 +949,8 @@ foreach($type in $types){
     }
 }
 }
-function win11format_click([string]$index,[switch]$nonquick,[switch]$withfile,[switch]$fillfile){
-installjava
-downloadsikuli
+
+function win11format([string]$index,[switch]$nonquick,[switch]$withfile,[switch]$fillfile){
 $foldername="WIN11"
 $clickname="format"
 $fillfiletake="-"
@@ -1077,7 +1080,11 @@ foreach($type in $types){
         outlog "$($index)_$($type)_$($unitsizstring)_FormatStart"
         $ws.SendKeys("{Enter}")
         Start-Sleep -s 5
-        [Clicker]::LeftClickAtPoint($screenwidth/2, $screenheight/2)
+        $screenWidth = (Get-CimInstance Win32_VideoController).CurrentHorizontalResolution
+        $screenHeight = (Get-CimInstance Win32_VideoController).CurrentVerticalResolution
+        $centerX = [int]($screenWidth / 2)
+        $centerY = [int]($screenHeight / 2)
+        [Clicker]::LeftClickAtPoint($centerX, $centerY)
         Start-Sleep -s 1
         $ws.SendKeys("{TAB}")
         Start-Sleep -s 1
@@ -1153,6 +1160,11 @@ $clickx=($coors[0].split(","))[0]
 $clicky=($coors[0].split(","))[1]
 $clickx2=($coors[1].split(","))[0]
 $clicky2=($coors[1].split(","))[1]
+$screenWidth = (Get-CimInstance Win32_VideoController).CurrentHorizontalResolution
+$screenHeight = (Get-CimInstance Win32_VideoController).CurrentVerticalResolution
+$centerX = [int]($screenWidth / 2)
+$centerY = [int]($screenHeight / 2)
+[Clicker]::LeftClickAtPoint($centerX, $centerY)
  Start-Process ms-settings:disksandvolumes
  start-sleep -s 20
 [KeySends.KeySend]::KeyDown([System.Windows.Forms.Keys]::Menu)
@@ -1180,7 +1192,7 @@ $clicky2=($coors[1].split(","))[1]
 }
 
 
-function win11format([string]$index,[switch]$nonquick,[switch]$withfile,[switch]$fillfile){
+function win11format_command([string]$index,[switch]$nonquick,[switch]$withfile,[switch]$fillfile){
 $fillfiletake="-"
 $picfolder=(join-path $picfolder $index).tostring()
 $matrix=import-csv $settingpath

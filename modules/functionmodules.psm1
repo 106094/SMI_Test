@@ -833,7 +833,7 @@ function serialportsend {
 
     try {
         $port.Open()
-        $port.WriteLine($sendkeys)   # 👈 sends newline
+        $port.WriteLine($sendkeys)   # sends newline
     }
     finally {
         if ($port.IsOpen) { $port.Close() }
@@ -862,3 +862,36 @@ Start-Sleep 0.2
 $sp.ReadExisting()
 $sp.Close()
 #>
+
+
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+
+public class MouseHelper
+{
+    [DllImport("user32.dll")]
+    public static extern bool GetCursorPos(out POINT lpPoint);
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct POINT
+    {
+        public int X;
+        public int Y;
+    }
+
+    public static string GetMousePosition()
+    {
+        POINT p;
+        if (GetCursorPos(out p))
+        {
+           return string.Format("X={0}, Y={1}", p.X, p.Y);
+
+        }
+        return "Unable to get position";
+    }
+}
+"@
+
+# Call the method
+#[MouseHelper]::GetMousePosition()
