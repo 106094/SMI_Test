@@ -163,16 +163,16 @@ seq_write_test() {
   end=$(now)
 
   duration=$(calc_duration "$start" "$end")
-  size_gb=$(du -sk "$SEQ_SRC" | awk '{print $1/1024/1024}')
-  speed=$(calc_speed "$size_gb" "$duration")
+  size_mb=$(du -sk "$SEQ_SRC" | awk '{print $1/1024}')
+  speed=$(calc_speed "$size_mb" "$duration")
 
   log_message "SEQ WRITE: ${speed} MB/s (${duration}s)" "$YELLOW"
 }
 
 # ==========================================================
-# STEP D+F: Full + negative copy
+# STEP D+F: Full  (->100G) + negative copy
 # ==========================================================
-verify_limit_and_negative() {
+verify_full_and_negative() {
   # --- verify written size ---
   written_bytes=$(du -sk "$UFD_DST" | awk '{print $1 * 1024}')
   IFS='|' read -r expected_bytes _ <<< "$(get_effective_test_bytes)"
@@ -213,9 +213,8 @@ seq_read_test() {
   end=$(now)
 
   duration=$(calc_duration "$start" "$end")
-  size_gb=$(du -sk "$mount_point/ufd_seq_src" | awk '{print $1/1024/1024}')
-  speed=$(calc_speed "$size_gb" "$duration")
-
+  size_mb=$(du -sk "$mount_point/ufd_seq_src" | awk '{print $1/1024}')
+  speed=$(calc_speed "$size_mb" "$duration")
   log_message "SEQ READ: ${speed} MB/s (${duration}s)" "$YELLOW"
 }
 
@@ -286,8 +285,8 @@ parallel_write_50pct() {
   end=$(now)
 
   duration=$(calc_duration "$start" "$end")
-  size_gb=$(du -sk "$MIX_SRC" | awk '{print $1/1024/1024}')
-  speed=$(calc_speed "$size_gb" "$duration")
+  size_mb=$(du -sk "$MIX_SRC" | awk '{print $1/1024}')
+  speed=$(calc_speed "$size_mb" "$duration")
 
   log_message "PAR WRITE: ${speed} MB/s (${duration}s)" "$YELLOW"
 }
@@ -301,8 +300,8 @@ self_rw_parallel() {
   end=$(now)
 
   duration=$(calc_duration "$start" "$end")
-  size_gb=$(du -sk "$MIX_SRC" | awk '{print $1/1024/1024}')
-  speed=$(calc_speed "$size_gb" "$duration")
+  size_mb=$(du -sk "$MIX_SRC" | awk '{print $1/1024}')
+  speed=$(calc_speed "$size_mb" "$duration")
 
   log_message "SELF R/W: ${speed} MB/s (${duration}s)" "$YELLOW"
 }
@@ -373,14 +372,14 @@ main() {
   # Run speedtest before
   log_message "speed test before write ... waiting..." "$BLUE" 
   IFS=',' read readspeed writespeed < <(Speedtest "$mount_point")
-  log_message"(before) read speed: ${readspeed}, write speed: ${writespeed}" "$YELLOW" 
+  log_message "(before) read speed: ${readspeed}, write speed: ${writespeed}" "$YELLOW" 
 
   parallel_write_50pct
   
   # Run speedtest after
   log_message "speed test after write ... waiting..." "$BLUE" 
   IFS=',' read readspeed writespeed < <(Speedtest "$mount_point")
-  log_message"(after) read speed: ${readspeed}, write speed: ${writespeed}" "$YELLOW" 
+  log_message "(after) read speed: ${readspeed}, write speed: ${writespeed}" "$YELLOW" 
 
   self_rw_parallel
   compare_internal_data
