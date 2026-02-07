@@ -369,13 +369,13 @@ run_benchmark() {
     local disk_size_gb=$(get_disk_size_gb "$disk")
     print_message "$CYAN" "Disk size: ${disk_size_gb} GB"
     
-    echo ""
-    read -p "$(echo -e ${RED}WARNING: All data on $disk will be erased. Continue? [y/N]: ${NC})" -n 1 -r
-    echo ""
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        print_message "$RED" "Benchmark cancelled."
-       Return 1
-    fi
+    #echo ""
+    #read -p "$(echo -e ${RED}WARNING: All data on $disk will be erased. Continue? [y/N]: ${NC})" -n 1 -r
+    #echo ""
+    #if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    #    print_message "$RED" "Benchmark cancelled."
+    #   Return 1
+    #fi
     
     # Define test matrix
     # Format: "Display Name|Filesystem|Partition Scheme"
