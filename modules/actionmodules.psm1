@@ -270,6 +270,7 @@ $proc.CloseMainWindow()
 }
 
 function cdm([string]$logname){
+if($testing){return}
    $checkrun= get-process -name diskmark64 -ea SilentlyContinue
     if($checkrun){
       $checkrun.CloseMainWindow()
@@ -718,7 +719,7 @@ outlog -message "total copying time: $($filltakes)" -logpath $os93log
     $os93result|export-csv $resultcsv -Encoding UTF8 -NoTypeInformation
    }
 
-   function poweraction([string]$powertype,[int64]$count){
+function poweraction([string]$powertype,[int64]$count){
    #$currenttime=Get-Date -Format "yy/MM/dd HH:mm:ss"
    #$recordpath=join-path $logfolder "power.csv"
    $checkcount=0
@@ -756,7 +757,7 @@ outlog -message "total copying time: $($filltakes)" -logpath $os93log
    }
 
 
-  function outlog([string]$message,[string]$logpath){
+function outlog([string]$message,[string]$logpath){
     if($logpath.length -eq 0){
         $logpath=$logmain
     }
@@ -953,12 +954,16 @@ foreach($type in $types){
 function win11format([string]$index,[switch]$nonquick,[switch]$withfile,[switch]$fillfile){
 $foldername="WIN11"
 $clickname="format"
+$coors=get-content $modulepath/coordinate_check_tool/click.txt
+$clickx2=((($coors[2].split(","))[0]).TrimEnd('%') -as [double])/100*$screenWidth
+$clicky2=((($coors[2].split(","))[1]).TrimEnd('%') -as [double])/100*$screenHeight
 $fillfiletake="-"
 $picfolder=(join-path $picfolder $index).tostring()
 $matrix=import-csv $settingpath
 $types=$matrix.FileSystem|Get-Unique
 $javalog="$modulepath\clicktool\SikuliLog_*.log"
 $skipcomb=@()
+$dirverdisk="$($driverletter):\"
 if($withfile){
     $matrix|Where-Object{$_."skip_withfile" -ne ""}|ForEach-Object{
     $skipcomb+= "$($_."FileSystem")$($_."Support"))"
@@ -1034,7 +1039,16 @@ foreach($type in $types){
         #endregion
         $freebefore = "{0:N2}" -f $((Get-PSDrive -Name $driverletter).Free)
         #cdm test before formating
-        $cdm_before=cdm -logname "$($index)_$($type)_$($unitsizstring)_CDMTestbefore"
+        if( $downselect1 -eq 1 -and  $downselect2 -eq 1){
+        $cdm_before=cdm -logname "$($index)_$($type)_$($unitsizstring)_CDMTest_before"
+        }
+        start-sleep -millisecond 500
+        $diskback=$false
+         while(!$diskback){
+          $diskback= Get-item $dirverdisk -ErrorAction Ignore
+          start-sleep -millisecond 100
+        }
+
         start-sleep -s 5
         openformat
         #click -foldername $foldername -imagef $clickname -pyfile "click.py" -passkey "CLICK on"
@@ -1055,16 +1069,18 @@ foreach($type in $types){
         $ws.SendKeys("{TAB}")
         Start-Sleep -Milliseconds 500
         #reset to top
-        for($x=1;$x -le 20;$x++){
-            $ws.SendKeys("{UP}")
-            Start-Sleep -Milliseconds 200
+        if(!($fillfile)){
+           for($x=1;$x -le 20;$x++){
+             $ws.SendKeys("{UP}")
+           Start-Sleep -Milliseconds 200
+        }
         }
         #select alllocated unit size
         for($x=1;$x -lt $downselect2;$x++){
             $ws.SendKeys("{Down}")
             Start-Sleep -Milliseconds 500
         }
-        if([int64]$unitsiz -lt 8000){
+        if((!$fillfile -and [int64]$unitsiz -lt 8000) -or ($fillfile -and $downselect1 -eq 1)){
         $ws.SendKeys("{TAB}")
         Start-Sleep -Milliseconds 500
         }
@@ -1079,30 +1095,23 @@ foreach($type in $types){
         screenshot -picpath $picfolder -picname $picnamestart
         outlog "$($index)_$($type)_$($unitsizstring)_FormatStart"
         $ws.SendKeys("{Enter}")
-        Start-Sleep -s 5
-        $screenWidth = (Get-CimInstance Win32_VideoController).CurrentHorizontalResolution
-        $screenHeight = (Get-CimInstance Win32_VideoController).CurrentVerticalResolution
-        $centerX = [int]($screenWidth / 2)
-        $centerY = [int]($screenHeight / 2)
-        [Clicker]::LeftClickAtPoint($centerX, $centerY)
-        Start-Sleep -s 1
-        $ws.SendKeys("{TAB}")
-        Start-Sleep -s 1
-        $ws.SendKeys("{TAB}")
-        Start-Sleep -s 1
-        $ws.SendKeys("{Enter}")
+        Start-Sleep -s 3 
+        [Clicker]::LeftClickAtPoint($clickx2, $clicky2)
         if($sw){
         $sw.reset()
         }
         $sw = [Diagnostics.Stopwatch]::StartNew()
-        $dirverdisk="$($driverletter):\"
+        start-sleep -millisecond 500
         $diskback=$false
          while(!$diskback){
           $diskback= Get-item $dirverdisk -ErrorAction Ignore
-          start-sleep -s 1
+          start-sleep -millisecond 100
         }
         $sw.stop()
         outlog "$($index)_$($type)_$($unitsizstring)_FormatComplete"
+        Start-Sleep -s 5
+        screenshot -picpath $picfolder -picname $picnamecomplete
+        $ws.SendKeys("%{F4}")
         $totalsecs = [math]::Round($sw.Elapsed.TotalSeconds, 2)
         $formattime = "{0}min {1}s" -f $minutes, $seconds
         $minutes = [int]($runningtime.TotalMinutes)
@@ -1111,13 +1120,18 @@ foreach($type in $types){
         $totalsecs =[math]::round($runningtime.TotalSeconds,2 )
         $runtimeText = "{0}min {1}s" -f $minutes, $seconds
         $formattime  = "$totalsecs s ($runtimeText)"
-        start-sleep -s 10
-        screenshot -picpath $picfolder -picname $picnamecomplete
         diskexploropen -openpath "shell:MyComputerFolder" -disk
         screenshot -picpath $picfolder -picname "Filldisk_BeforeFormat"
         $ws.SendKeys("%{F4}") #close file explore
-        #CDM testing
+        #CDM testing after
         $cdm_after=cdm -logname "$($index)_$($type)_$($unitsizstring)_CDMTest_after"
+        $cdm_before=$cdm_after
+        start-sleep -millisecond 500
+        $diskback=$false
+         while(!$diskback){
+          $diskback= Get-item $dirverdisk -ErrorAction Ignore
+          start-sleep -millisecond 100
+        }
         start-sleep -s 5
         $freeafter = "{0:N2}" -f $((Get-PSDrive -Name $driverletter).Free)
         $vol = Get-Volume -DriveLetter $driverletter
@@ -1149,17 +1163,17 @@ foreach($type in $types){
             logtime            = $logtime
             }
     $formatresult|export-csv -Path $formatcsvlog -Encoding UTF8 -NoTypeInformation -Append
-    get-process -name "systemsettings"|stop-process
+    get-process -name "systemsettings" -ErrorAction SilentlyContinue|stop-process
     }
 }
 }
 
 function openformat{
 $coors=get-content $modulepath/coordinate_check_tool/click.txt
-$clickx=($coors[0].split(","))[0]
-$clicky=($coors[0].split(","))[1]
-$clickx2=($coors[1].split(","))[0]
-$clicky2=($coors[1].split(","))[1]
+$clickx=((($coors[0].split(","))[0]).TrimEnd('%') -as [double])/100*$screenWidth
+$clicky=((($coors[0].split(","))[1]).TrimEnd('%') -as [double])/100*$screenHeight
+$clickx2=((($coors[1].split(","))[0]).TrimEnd('%') -as [double])/100*$screenWidth
+$clicky2=((($coors[1].split(","))[1]).TrimEnd('%') -as [double])/100*$screenHeight
 $screenWidth = (Get-CimInstance Win32_VideoController).CurrentHorizontalResolution
 $screenHeight = (Get-CimInstance Win32_VideoController).CurrentVerticalResolution
 $centerX = [int]($screenWidth / 2)
@@ -1176,25 +1190,26 @@ $centerY = [int]($screenHeight / 2)
 [KeySends.KeySend]::KeyUp([System.Windows.Forms.Keys]::Space)
  start-sleep -Milliseconds 200
   $ws.SendKeys("x")
-  start-sleep -s 1
+  start-sleep -s 2
   1..5 | ForEach-Object {
   [Mouse]::mouse_event(0x0800, 0, 0, -120, 0)
 }
-  start-sleep -s 1
+  start-sleep -s 2
  [Clicker]::LeftClickAtPoint($clickx, $clicky)
   start-sleep -s 2
     1..5 | ForEach-Object {
   [Mouse]::mouse_event(0x0800, 0, 0, -120, 0)
 }
- start-sleep -s 1
+ start-sleep -s 2
 [Clicker]::LeftClickAtPoint($clickx2, $clicky2)
-  start-sleep -s 1
+  start-sleep -s 2
 }
 
 
 function win11format_command([string]$index,[switch]$nonquick,[switch]$withfile,[switch]$fillfile){
 $fillfiletake="-"
 $picfolder=(join-path $picfolder $index).tostring()
+$dirverdisk="$($driverletter):\"
 $matrix=import-csv $settingpath
 $types=$matrix.FileSystem|Get-Unique
 $skipcomb=@()
@@ -1278,7 +1293,6 @@ foreach($type in $types){
         }
         outlog "$($index)_$($type)_$($unitsizstring)_FormatStart"
         $sw = [Diagnostics.Stopwatch]::StartNew()
-        $dirverdisk="$($driverletter):\"
         #format command
         if($nonquick){
         formatdisk -driverletter $driverletter -filesys $type -unitsiz $unitsiz -full

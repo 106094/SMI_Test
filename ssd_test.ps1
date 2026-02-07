@@ -1,3 +1,6 @@
+param(
+[switch]$testing
+)
 Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy Bypass -Force
 Add-Type -AssemblyName System.Windows.Forms,System.Drawing,Microsoft.VisualBasic
 Add-Type -AssemblyName UIAutomationClient
@@ -6,10 +9,10 @@ Add-Type -AssemblyName PresentationFramework
 $shell=New-Object -ComObject shell.application
 $ws=New-Object -ComObject wscript.shell
 
-$screen = [System.Windows.Forms.Screen]::PrimaryScreen
-$bounds = $screen.Bounds
-$screenheight=$bounds.Bottom
-$screenwidth=$bounds.Right
+$screenWidth = (Get-CimInstance Win32_VideoController).CurrentHorizontalResolution
+$screenHeight = (Get-CimInstance Win32_VideoController).CurrentVerticalResolution
+$centerX = [int]($screenWidth / 2)
+$centerY = [int]($screenHeight / 2)
 if ($PSScriptRoot) {
     $rootpath = $PSScriptRoot
 } else {
@@ -88,7 +91,7 @@ $clustercheck=test_diskClusterSize -DeviceType "FLASH" -index "OS06-D" #OS06-D
 #>
 (get-process -name "ssd_test")| Set-WindowState -State MINIMIZE
 if($os -match "11"){
-if($options -like "*[[]1[]]*"){win11format -index "OS20Scen2_clean" -fillfile}
+if($options -like "*[[]1[]]*"){win11format -index "OS20Scen2_clean" -fillfile} #only default
 if($options -like "*[[]2[]]*"){win11format -index "OS21Scen2_clean" -nonquick}
 if($options -like "*[[]3[]]*"){win11format -index "OS21Scen2_file" -withfile -nonquick}
 }
