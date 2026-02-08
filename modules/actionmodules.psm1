@@ -1010,7 +1010,7 @@ foreach($type in $types){
         $copytakes="$([math]::Round($sw.Elapsed.TotalSeconds,2)) sec"
         $minutes = [int]$sw.Elapsed.TotalMinutes
         $seconds = [int] $sw.Elapsed.Seconds
-        $totalsecs = $runningtime.TotalSeconds
+        $totalsecs = $sw.Elapsed.TotalSeconds
         $copytakes = "{0}min {1}s" -f $minutes, $seconds
         }
         #endregion
@@ -1082,10 +1082,11 @@ foreach($type in $types){
         outlog "$($index)_$($type)_$($unitsizstring)_FormatStart"
         $ws.SendKeys("{Enter}")
         Start-Sleep -s 3 
+        [Clicker]::LeftClickAtPoint($centerX, $centerY)
+        Start-Sleep -s 1
         [Clicker]::LeftClickAtPoint($clickx2, $clicky2)
         if($sw){
         $sw.reset()
-
         }
         $sw = [Diagnostics.Stopwatch]::StartNew()
         start-sleep -millisecond 500
@@ -1100,11 +1101,9 @@ foreach($type in $types){
         screenshot -picpath $picfolder -picname $picnamecomplete
         $ws.SendKeys("%{F4}")
         $totalsecs = [math]::Round($sw.Elapsed.TotalSeconds, 2)
-        $formattime = "{0}min {1}s" -f $minutes, $seconds
-        $minutes = [int]($runningtime.TotalMinutes)
+        $minutes = [int]($sw.Elapsed.TotalMinutes)
         [int]$seconds= 0 
-        $minutes = [math]::DivRem([int]$runningtime.TotalSeconds, 60, [ref]$seconds)
-        $totalsecs =[math]::round($runningtime.TotalSeconds,2 )
+        [math]::DivRem($totalsecs, 60, [ref]$seconds)
         $runtimeText = "{0}min {1}s" -f $minutes, $seconds
         $formattime  = "$totalsecs s ($runtimeText)"
         diskexploropen -openpath "shell:MyComputerFolder" -disk
@@ -1128,7 +1127,6 @@ foreach($type in $types){
         $actualalll = "{0} kilibytes" -f ($actualCluster/ 1KB)
         }
         $sizeGB = [math]::Round($vol.Size / 1GB,2)
-        $formattime = "$($totalsecs)s"
         $driverpath="$($driverletter):"
         $logtime=get-date -format "yy/MM/dd HH:mm:ss"
         $formatresult=[PSCustomObject]@{
