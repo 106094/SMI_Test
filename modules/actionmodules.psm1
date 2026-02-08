@@ -230,7 +230,6 @@ $ws.SendKeys("%{F4}")
 start-sleep -s 1
 }
 }
-
 function diskmgnt([string]$type,[string]$picname){
     #diskmanagement
 mmc.exe diskmgmt.msc
@@ -268,7 +267,6 @@ $ws.SendKeys("%{F4}")
 }
 $proc.CloseMainWindow()
 }
-
 function cdm([string]$logname){
 if($testing){return}
    $checkrun= get-process -name diskmark64 -ea SilentlyContinue
@@ -408,7 +406,6 @@ $extracts=@()
   }
   return $extracts
 }
-
 function test-FileSizeOnDisk {
     param(
         [Parameter(Mandatory)]
@@ -491,8 +488,6 @@ function test_diskClusterSize {
         logtime        = $logtime
     }
 }
-
-
 function Get-FsMatrixGuiLike {
 
     $vol = Get-Volume -DriveLetter $driverletter -ErrorAction Stop
@@ -569,7 +564,6 @@ function FileCreate {
     }
     return $fscheck
 }
-
 function getdiskinfo([string]$index){
     $drive = Get-PSDrive -Name $driverletter
     $used  = $drive.Used
@@ -595,7 +589,6 @@ function getdiskinfo([string]$index){
         }
     }
 }
-
 function OS93{
     param(
     [int64]$totalsize=100GB
@@ -718,7 +711,6 @@ outlog -message "total copying time: $($filltakes)" -logpath $os93log
     $resultcsv=(join-path $logfolder $csvname).ToString()
     $os93result|export-csv $resultcsv -Encoding UTF8 -NoTypeInformation
    }
-
 function poweraction([string]$powertype,[int64]$count){
    #$currenttime=Get-Date -Format "yy/MM/dd HH:mm:ss"
    #$recordpath=join-path $logfolder "power.csv"
@@ -755,8 +747,6 @@ function poweraction([string]$powertype,[int64]$count){
        }
     }
    }
-
-
 function outlog([string]$message,[string]$logpath){
     if($logpath.length -eq 0){
         $logpath=$logmain
@@ -768,7 +758,6 @@ function outlog([string]$message,[string]$logpath){
     }
     add-content $logpath -Value $logmessage -Force
   }
-
 function testos{
 $build = Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion" -Name "CurrentBuild" | Select-Object -ExpandProperty CurrentBuild
 
@@ -778,7 +767,6 @@ if ([int]$build -ge 22000) {
    return "Win10"
 }
 }
-
 function win11format_java([string]$index,[switch]$nonquick,[switch]$withfile){
 installjava
 downloadsikuli
@@ -1039,9 +1027,7 @@ foreach($type in $types){
         #endregion
         $freebefore = "{0:N2}" -f $((Get-PSDrive -Name $driverletter).Free)
         #cdm test before formating
-        if( $downselect1 -eq 1 -and  $downselect2 -eq 1){
         $cdm_before=cdm -logname "$($index)_$($type)_$($unitsizstring)_CDMTest_before"
-        }
         start-sleep -millisecond 500
         $diskback=$false
          while(!$diskback){
@@ -1080,14 +1066,14 @@ foreach($type in $types){
             $ws.SendKeys("{Down}")
             Start-Sleep -Milliseconds 500
         }
-        if((!$fillfile -and [int64]$unitsiz -lt 8000) -or ($fillfile -and $downselect1 -eq 1)){
-        $ws.SendKeys("{TAB}")
-        Start-Sleep -Milliseconds 500
-        }
         $ws.SendKeys("{TAB}")
         Start-Sleep -Milliseconds 500
         if($nonquick){
         $ws.SendKeys(" ")
+        Start-Sleep -Milliseconds 500
+        }
+        if((!$fillfile -and [int64]$unitsiz -lt 8000) -or ($fillfile -and $downselect1 -eq 1)){
+        $ws.SendKeys("{TAB}")
         Start-Sleep -Milliseconds 500
         }
         $ws.SendKeys("{TAB}")
@@ -1099,6 +1085,7 @@ foreach($type in $types){
         [Clicker]::LeftClickAtPoint($clickx2, $clicky2)
         if($sw){
         $sw.reset()
+
         }
         $sw = [Diagnostics.Stopwatch]::StartNew()
         start-sleep -millisecond 500
@@ -1125,7 +1112,6 @@ foreach($type in $types){
         $ws.SendKeys("%{F4}") #close file explore
         #CDM testing after
         $cdm_after=cdm -logname "$($index)_$($type)_$($unitsizstring)_CDMTest_after"
-        $cdm_before=$cdm_after
         start-sleep -millisecond 500
         $diskback=$false
          while(!$diskback){
@@ -1205,7 +1191,6 @@ $centerY = [int]($screenHeight / 2)
   start-sleep -s 2
 }
 
-
 function win11format_command([string]$index,[switch]$nonquick,[switch]$withfile,[switch]$fillfile){
 $fillfiletake="-"
 $picfolder=(join-path $picfolder $index).tostring()
@@ -1279,6 +1264,7 @@ foreach($type in $types){
          <#   
         $filldisk=FileCreate -FillDisk
         #>
+         chkdsk $diskpath /f /r|out-null
         diskexploropen -openpath "shell:MyComputerFolder" -disk
         screenshot -picpath $picfolder -picname "Filldisk_BeforeFormat"
         $ws.SendKeys("%{F4}") #close file explore
