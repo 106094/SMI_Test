@@ -57,7 +57,6 @@ if($type -eq "format"){
  $timesuffix=get-date -format "_yyMMdd-HHmmss"
  $logfilename= "$($index)$($timesuffix).log"
  $logpath= (join-path $logfolder $logfilename).ToString()
- $copytakes="-"
  $matrix=import-csv $settingpath
  $types=$matrix.FileSystem|Get-Unique
  $skipcomb=@()
@@ -99,6 +98,7 @@ foreach($type in $types){
 $downselect1=$types.indexof($type)+1
 $unitsizes=$matrix|Where-Object{$_.fileSystem -eq $type}
  foreach($unitsiz in $unitsizes){
+    $copytime="-"
     $unitsizbyte=$unitsiz."AllocationUnitSize"
     $settingcomb="$($type)$($unitsizbyte)"
     if($settingcomb -in $skipcomb){
@@ -121,11 +121,11 @@ $unitsizes=$matrix|Where-Object{$_.fileSystem -eq $type}
     $sw = [Diagnostics.Stopwatch]::StartNew()
     Copy-Item -Path $filefull -Destination $dest -Force -ErrorAction SilentlyContinue
     $sw.Stop()
-    $copytakes="$([math]::Round($sw.Elapsed.TotalSeconds,2)) sec"
+    $copysecs=[math]::Round($sw.Elapsed.TotalSeconds,2)
     $minutes = [int]$sw.Elapsed.TotalMinutes
     $seconds = [int] $sw.Elapsed.Seconds
-    $totalsecs = $runningtime.TotalSeconds
     $copytakes = "{0}min {1}s" -f $minutes, $seconds
+    $copytime  = "$($copysecs) s ($copytakes)"
     }
     $ws.SendKeys("{F5}")
     start-sleep -s 2
@@ -208,6 +208,7 @@ $unitsizes=$matrix|Where-Object{$_.fileSystem -eq $type}
     FileSystem         = $actualFS
     AllocationUnitSize = $actualalll
     formattime         = $formattime
+    copytime           = $copytime
     VolumeSize_GB      = $sizeGB
     diskfree_Before    = $freebefore
     diskfree_After     = $freeafter
@@ -655,7 +656,11 @@ while($true){
     $poptext1=(Get-PopupWindowText -TitleRegex 'complete').text
     start-sleep -s 30
     }
-    $copytakes="$([math]::Round($sw2.Elapsed.TotalSeconds,2)) sec"
+    $copysecs=[math]::Round($sw.Elapsed.TotalSeconds,2)
+    $minutes = [int]$sw.Elapsed.TotalMinutes
+    $seconds = [int] $sw.Elapsed.Seconds
+    $copytakes = "{0}min {1}s" -f $minutes, $seconds
+    $copytime  = "$($copysecs) s ($copytakes)"
     outlog -message "Copying Completed, idle for 20 min..." -logpath $os93log
     start-sleep -s 1200 #idle 20 mins
     #region comparefile
@@ -690,7 +695,7 @@ while($true){
             foldername = $newdes
             result     = $result
             failitems  = $failitems
-            takingtime = $copytakes
+            takingtime = $copytime
          }
      
     $sw2.stop()
@@ -832,11 +837,12 @@ foreach($type in $types){
         $sw = [Diagnostics.Stopwatch]::StartNew()
         Copy-Item -Path $filefull -Destination $dest -Force -ErrorAction SilentlyContinue
         $sw.Stop()
-        $copytakes="$([math]::Round($sw.Elapsed.TotalSeconds,2)) sec"
+        $copysecs=[math]::Round($sw.Elapsed.TotalSeconds,2)
         $minutes = [int]$sw.Elapsed.TotalMinutes
         $seconds = [int] $sw.Elapsed.Seconds
-        $totalsecs = $runningtime.TotalSeconds
         $copytakes = "{0}min {1}s" -f $minutes, $seconds
+        $copytime  = "$($copysecs) s ($copytakes)"
+
         }
         #endregion
         $freebefore = "{0:N2}" -f $((Get-PSDrive -Name $driverletter).Free)
@@ -922,6 +928,7 @@ foreach($type in $types){
             FileSystem         = $actualFS
             AllocationUnitSize = $actualalll
             formattime         = $formattime
+            copytime           = $copytime
             VolumeSize_GB      = $sizeGB
             diskfree_Before    = $freebefore
             diskfree_After     = $freeafter
@@ -984,6 +991,7 @@ foreach($type in $types){
     $downselect1=$types.indexof($type)+1
     $unitsizes=($matrix|Where-Object{$_.FileSystem -eq $type}).Support
     foreach($unitsiz in $unitsizes){
+        $copytime="-"
         $settingcomb="$($type)$($unitsiz)"
         if($settingcomb -in $skipcomb){
             continue
@@ -1000,6 +1008,11 @@ foreach($type in $types){
         $picnamecomplete="$($type)_$($unitsizstring)_Format_complete"
         #region 5G copy
         if($withfile){
+        $leftsize=(Get-Volume -DriveLetter $driverletter).SizeRemaining
+        if($leftsize -lt $formatfilesize){
+        outlog "$($index)_$($type)_$($unitsizstring): lastformat failed cause copy fail"
+        continue
+        }
         if(!(test-path $filefull)){
         fsutil file createnew $filefull $formatfilebytes|Out-Null
             }
@@ -1007,11 +1020,11 @@ foreach($type in $types){
         $sw = [Diagnostics.Stopwatch]::StartNew()
         Copy-Item -Path $filefull -Destination $dest -Force -ErrorAction SilentlyContinue
         $sw.Stop()
-        $copytakes="$([math]::Round($sw.Elapsed.TotalSeconds,2)) sec"
+        $copysecs=[math]::Round($sw.Elapsed.TotalSeconds,2)
         $minutes = [int]$sw.Elapsed.TotalMinutes
         $seconds = [int] $sw.Elapsed.Seconds
-        $totalsecs = $sw.Elapsed.TotalSeconds
         $copytakes = "{0}min {1}s" -f $minutes, $seconds
+        $copytime  = "$($copysecs) s ($copytakes)"
         }
         #endregion
         #region fillfile in disk 
@@ -1134,6 +1147,7 @@ foreach($type in $types){
             FileSystem         = $actualFS
             AllocationUnitSize = $actualalll
             formattime         = $formattime
+            copytake           = $copytime
             VolumeSize_GB      = $sizeGB
             diskfree_Before    = $freebefore
             diskfree_After     = $freeafter
@@ -1254,6 +1268,7 @@ foreach($type in $types){
         $seconds = [int] $sw.Elapsed.Seconds
         $totalsecs = $runningtime.TotalSeconds
         $copytakes = "{0}min {1}s" -f $minutes, $seconds
+        $copytime  = "$totalsecs s ($copytakes)"
         }
         #endregion
         #region fillfile in disk 
@@ -1323,8 +1338,9 @@ foreach($type in $types){
             Drive              = $driverpath
             FileSystem         = $actualFS
             AllocationUnitSize = $actualalll
-            formattime         = $formattime
             VolumeSize_GB      = $sizeGB
+            formattime         = $formattime
+            copytime           = $copytime
             diskfree_Before    = $freebefore
             diskfree_After     = $freeafter
             CDM_Read_Before    = $cdm_before[0]
