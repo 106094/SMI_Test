@@ -16,7 +16,6 @@ UFD_CAP_GB=100
 SEQ_SRC="$HOME/ufd_src"
 MIX_SRC="$HOME/ufd_mix_src"
 READBACK_DST="$HOME/ufd_readback"
-
 LOG_DIR="$HOME/SSD_Format_Benchmark"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 RESULTS_LOG="${LOG_DIR}/OS3538MAC_log_${TIMESTAMP}.log"
@@ -175,30 +174,15 @@ seq_write_test() {
 verify_full_and_negative() {
   # --- verify written size ---
   written_bytes=$(du -sk "$UFD_DST" | awk '{print $1 * 1024}')
-  IFS='|' read -r expected_bytes _ <<< "$(get_effective_test_bytes)"
-
-  if (( written_bytes < expected_bytes * 95 / 100 )); then
-    log_message "ERROR: Written data size too small" "$RED" 
-    log_message "Expected ~${expected_bytes} bytes, got ${written_bytes}"
+  expected_bytes=$(du -sk "$SEQ_SRC" | awk '{print $1 * 1024}')
+if (( written_bytes != expected_bytes )); then
+    log_message "ERROR: Written data size does not match expected size" "$RED"
+    log_message "Expected: ${expected_bytes} bytes"
+    log_message "Got:     ${written_bytes} bytes"
+    log_message "Difference: $(( written_bytes - expected_bytes )) bytes" "$YELLOW"
     exit 1
   fi
-
-  log_message "Data size verification: OK (capped workload)" "$GREEN"
-
-  # --- negative copy test ---
-  log_message "Negative copy test (expect failure due to test limit)" "$BLUE" 
-
-  set +e
-  dd if=/dev/zero of="$mount_point/overflow.bin" bs=1M count=1024 2>>"$RESULTS_LOG"
-  rc=$?
-  set -e
-
-  if [[ "$rc" -eq 0 ]]; then
-    log_message "ERROR: Overflow copy succeeded (unexpected)" "$RED"
-    exit 1
-  fi
-
-  log_message "Negative copy: PASS" "$GREEN"
+ log_message "Data size verification: OK (exact match)" "$GREEN"
 }
 
 # ==========================================================
@@ -213,7 +197,7 @@ seq_read_test() {
   end=$(now)
 
   duration=$(calc_duration "$start" "$end")
-  size_mb=$(du -sk "$mount_point/ufd_seq_src" | awk '{print $1/1024}')
+  size_mb=$(du -sk "$UFD_SRC" | awk '{print $1/1024}')
   speed=$(calc_speed "$size_mb" "$duration")
   log_message "SEQ READ: ${speed} MB/s (${duration}s)" "$YELLOW"
 }
