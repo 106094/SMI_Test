@@ -171,18 +171,16 @@ seq_write_test() {
 # ==========================================================
 # STEP D+F: Full  (->100G) + negative copy
 # ==========================================================
-verify_full_and_negative() {
-  # --- verify written size ---
-  written_bytes=$(du -sk "$UFD_DST" | awk '{print $1 * 1024}')
-  expected_bytes=$(du -sk "$SEQ_SRC" | awk '{print $1 * 1024}')
-if (( written_bytes != expected_bytes )); then
-    log_message "ERROR: Written data size does not match expected size" "$RED"
-    log_message "Expected: ${expected_bytes} bytes"
-    log_message "Got:     ${written_bytes} bytes"
-    log_message "Difference: $(( written_bytes - expected_bytes )) bytes" "$YELLOW"
+verify_written_size() {
+  written=$(du -sk "$UFD_DST" | awk '{print $1 * 1024}')
+  expected=$(du -sk "$SEQ_SRC" | awk '{print $1 * 1024}')
+
+  if (( written != expected )); then
+    log_message "ERROR: Size mismatch - expected ${expected} bytes, got ${written}" "$RED"
     exit 1
   fi
- log_message "Data size verification: OK (exact match)" "$GREEN"
+
+  log_message "Size check: PASS" "$GREEN"
 }
 
 # ==========================================================
@@ -387,7 +385,7 @@ main() {
   IFS=',' read readspeed writespeed < <(Speedtest "$mount_point")
   log_message "$GREEN" "(after) read speed: ${readspeed}, write speed: ${writespeed}"
 
-  verify_full_and_negative
+  verify_written_size
   seq_read_test
   reconnect_test
   delete_test "$UFD_DST"
