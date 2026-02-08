@@ -1,4 +1,4 @@
-﻿function get_driverletter {
+﻿function get_driveletter {
     # Using Get-CimInstance for better performance in compiled EXEs
     $removable = Get-CimInstance Win32_Volume -Filter "DriveType=2" | Select-Object -ExpandProperty DriveLetter
     
@@ -23,16 +23,17 @@
 }
 
 
-$diskpath = get_driverletter
+$diskpath = get_driveletter
 if ($null -eq $diskpath) { exit }
 
-$driverletter = $diskpath.Replace(":", "")
+$driveletter = $diskpath.Replace(":", "")
 $Filepath = Join-Path $diskpath "test.bin"
 
- format "$($driverletter):" /FS:NTFS /V:Test /Q /X /Y |out-null
+ #format "$($driverletter):" /FS:NTFS /V:Test /Q /X /Y |out-null
+ Format-Volume -DriveLetter "$driveLetter" -FileSystem NTFS -NewFileSystemLabel "Test" -Full:$false|out-null
 
 # Get free space and ensure it stays as a 64-bit integer
-$freeSpace = (Get-PSDrive -Name $driverletter).Free
+$freeSpace = (Get-PSDrive -Name $driveletter).Free
 $targetSize = [int64]($freeSpace -1.1GB)
 
 # SAFETY CHECK: If the drive has less than 1.1GB, $targetSize will be <= 0
