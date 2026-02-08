@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-#!/bin/bash
 set -euo pipefail
-set +x
+set -x #debug output
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -51,19 +50,21 @@ EOF
 }
 
 calc_duration() {
+  local start=$1 end=$2
   if [[ "$TIMING_MODE" == "python" ]]; then
-    python3 -c "print(round($2 - $1, 1))"
+    python3 -c "print(round($end - $start, 1))"
   else
-    echo $(( $2 - $1 ))
+    echo $(( end - start ))
   fi
 }
 
 calc_speed() {
+  local bytes=$1 secs=$2
   if [[ "$TIMING_MODE" == "python" ]]; then
-    python3 -c "print(round($1 / $2, 1))"
+    python3 -c "print(round($bytes / $secs, 1))"
   else
     command -v bc >/dev/null 2>&1 || { echo "N/A"; return; }
-    echo "scale=1; $1 / $2" | bc
+    echo "scale=1; $bytes / $secs" | bc
   fi
 }
 
@@ -195,7 +196,7 @@ seq_read_test() {
   end=$(now)
 
   duration=$(calc_duration "$start" "$end")
-  size_mb=$(du -sk "$UFD_SRC" | awk '{print $1/1024}')
+  size_mb=$(du -sk "$UFD_DST" | awk '{print $1/1024}')
   speed=$(calc_speed "$size_mb" "$duration")
   log_message "SEQ READ: ${speed} MB/s (${duration}s)" "$YELLOW"
 }
@@ -383,7 +384,7 @@ main() {
   # Run speedtest after
   log_message "speed test after write ... waiting..." "$BLUE" 
   IFS=',' read readspeed writespeed < <(Speedtest "$mount_point")
-  log_message "$GREEN" "(after) read speed: ${readspeed}, write speed: ${writespeed}"
+  log_message "(after) read speed: ${readspeed}, write speed: ${writespeed}" "$GREEN"
 
   verify_written_size
   seq_read_test
