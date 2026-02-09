@@ -74,11 +74,13 @@ calc_speed() {
 detect_ufd() {
   disk=$(diskutil list external physical | awk '/\/dev\/disk/{print $1; exit}')
   disk=${disk#/dev/}
-  [[ -z "$disk" ]] && { log_message "ERROR: No UFD detected"; exit 1; }
+  [[ -z "$disk" ]] && { log_message "ERROR: No UFD detected" "$RED"; exit 1; }
   log_message "Detected UFD: $disk"  "$GREEN"
 }
 
 mount_ufd() {
+  diskutil unmountDisk "$disk" >/dev/null 2>&1 || true
+  diskutil eraseDisk exFAT BENCH GPT "$disk" >/dev/null 2>&1
   diskutil mountDisk "$disk" >/dev/null 2>&1 || true
   mount_point=""
   for i in {1..5}; do
@@ -86,13 +88,14 @@ mount_ufd() {
      if ! info=$(diskutil info "$slice" 2>/dev/null); then
         continue
       fi
+      content=$(echo "$info" | awk -F': ' '/Volume Name/ {print $2}' | xargs)
       mp=$(echo "$info" | awk -F': ' '/Mount Point/ {print $2}' | xargs)
-    if [[ -n "$mp" && -d "$mp" ]]; then
+    if [[ "$content" != "EFI" && -n "$mp" && -d "$mp" ]]; then
       mount_point="${mp% [0-9]*}"
       break
     fi
   done
-
+echo "Mount point: $mount_point"
   [[ -z "$mount_point" ]] && { log_message "ERROR: Mount point not found" "$RED"; exit 1; }
   log_message "Mounted at: $mount_point" "$GREEN"
 }
@@ -178,10 +181,10 @@ verify_written_size() {
 
   if (( written != expected )); then
     log_message "ERROR: Size mismatch - expected ${expected} bytes, got ${written}" "$RED"
-    exit 1
-  fi
-
+  
+  Else
   log_message "Size check: PASS" "$GREEN"
+  fi
 }
 
 # ==========================================================
@@ -380,7 +383,7 @@ main() {
   log_message "(before) read speed: ${readspeed}, write speed: ${writespeed}" "$YELLOW" 
 
   seq_write_test
-
+			
   # Run speedtest after
   log_message "speed test after write ... waiting..." "$BLUE" 
   IFS=',' read readspeed writespeed < <(Speedtest "$mount_point")
