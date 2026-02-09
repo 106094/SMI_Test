@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-set -x #debug output
+#set -x #debug output
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -262,8 +262,8 @@ prepare_mixed_50pct() {
 parallel_write_50pct() {
   log_message "Parallel WRITE (2 instances, 50%)"
   start=$(now)
-  cp -R "$MIX_SRC/large.bin" "$mount_point/" &
-  cp -R "$MIX_SRC/small" "$mount_point/" &
+  cp -R "$MIX_SRC/large.bin" "$UFD_DST/" &
+  cp -R "$MIX_SRC/small" "$UFD_DST/" &
   wait
   end=$(now)
 
@@ -275,10 +275,10 @@ parallel_write_50pct() {
 }
 
 self_rw_parallel() {
-  log_message "Self R/W (UFD→UFD, 2 instances)"
+  log_message "Self R/W (UFD→UFDCP, 2 instances)"
   start=$(now)
-  cp -R "$mount_point/large.bin" "$UFD_DSTCP/" &
-  cp -R "$mount_point/small" "$UFD_DSTCP/" &
+  cp -R "$UFD_DST/large.bin" "$UFD_DSTCP/" &
+  cp -R "$UFD_DST/small" "$UFD_DSTCP/" &
   wait
   end=$(now)
 
@@ -291,8 +291,8 @@ self_rw_parallel() {
 
 compare_internal_data() {
   log_message "Comparing self-copied data"
-  cmp "$mount_point/large.bin" "$UFD_DSTCP/large.bin"
-  diff -qr "$mount_point/small" "$UFD_DSTCP/small"
+  cmp "$UFD_DST/large.bin" "$UFD_DSTCP/large.bin"
+  diff -qr "$UFD_DST/small" "$UFD_DSTCP/small"
   log_message "Data compare: PASS"
 }
 
