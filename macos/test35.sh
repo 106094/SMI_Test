@@ -177,10 +177,12 @@ seq_write_test() {
 verify_written_size() {
   written=$(du -sk "$UFD_DST/bigfile.bin" | awk '{print $1 * 1024}')
   expected=$(du -sk "$SEQ_SRC/bigfile.bin" | awk '{print $1 * 1024}')
-
+ log_message "bigfile.bin in $SEQ_SRC Size is "$expected"" "$YELLOW"
+ log_message "bigfile.bin in $UFD_DST Size is "written"" "$YELLOW"
   if (( written != expected )); then
     log_message "ERROR: Size mismatch - expected ${expected} bytes, got ${written}" "$RED"
-  else
+  
+  Else
   log_message "Size check: PASS" "$GREEN"
   fi
 }
@@ -202,6 +204,21 @@ seq_read_test() {
   log_message "SEQ READ: ${speed} MB/s (${duration}s)" "$YELLOW"
 }
 
+# ==========================================================
+# STEP D+F: Full  (->100G) + negative copy
+# ==========================================================
+verify_read_size() {
+  written=$(du -sk "$UFD_DST/bigfile.bin" | awk '{print $1 * 1024}')
+  expected=$(du -sk "$READBACK_DST/bigfile.bin" | awk '{print $1 * 1024}')
+ log_message "bigfile.bin in $UFD_DST Size is "$expected"" "$YELLOW"
+ log_message "bigfile.bin in $READBACK_DST Size is "written"" "$YELLOW"
+  if (( written != expected )); then
+    log_message "ERROR: Size mismatch - expected ${expected} bytes, got ${written}" "$RED"
+  
+  Else
+  log_message "Size check: PASS" "$GREEN"
+  fi
+}
 # ==========================================================
 # STEP K: Reconnect detection
 # ==========================================================
