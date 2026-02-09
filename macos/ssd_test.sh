@@ -427,8 +427,7 @@ run_benchmark() {
         mount_point="$(mountcheck "$disk" || true)"
         echo "mount point: $mount_point"
 
-        fill_status="no"
-         if [ "$fill_before_format" = "yes" ] && [ $current_test -gt 1 ]; then
+         if [ "$fill_before_format" = "yes" ] ; then
           fill_status="yes"
             if [ -n "$mount_point" ] && [ -d "$mount_point" ]; then
              echo "fill disk start"
