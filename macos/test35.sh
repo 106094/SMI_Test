@@ -95,7 +95,6 @@ mount_ufd() {
       break
     fi
   done
-echo "Mount point: $mount_point"
   [[ -z "$mount_point" ]] && { log_message "ERROR: Mount point not found" "$RED"; exit 1; }
   log_message "Mounted at: $mount_point" "$GREEN"
 }
@@ -176,13 +175,12 @@ seq_write_test() {
 # STEP D+F: Full  (->100G) + negative copy
 # ==========================================================
 verify_written_size() {
-  written=$(du -sk "$UFD_DST" | awk '{print $1 * 1024}')
-  expected=$(du -sk "$SEQ_SRC" | awk '{print $1 * 1024}')
+  written=$(du -sk "$UFD_DST/bigfile.bin" | awk '{print $1 * 1024}')
+  expected=$(du -sk "$SEQ_SRC/bigfile.bin" | awk '{print $1 * 1024}')
 
   if (( written != expected )); then
     log_message "ERROR: Size mismatch - expected ${expected} bytes, got ${written}" "$RED"
-  
-  Else
+  else
   log_message "Size check: PASS" "$GREEN"
   fi
 }
@@ -294,10 +292,27 @@ self_rw_parallel() {
 
 compare_internal_data() {
   log_message "Comparing self-copied data"
-  cmp "$UFD_DST/large.bin" "$UFD_DSTCP/large.bin"
-  diff -qr "$UFD_DST/small" "$UFD_DSTCP/small"
-  log_message "Data compare: PASS"
+  local fail=0
+
+  cmp -s "$UFD_DST/large.bin" "$UFD_DSTCP/large.bin" || {
+    log_message "Mismatch: large.bin" "$RED"
+    fail=1
+  }
+
+  diff -qr "$UFD_DST/small" "$UFD_DSTCP/small" >/dev/null || {
+    log_message "Mismatch: small directory" "$RED"
+    fail=1
+  }
+
+  if [[ $fail -eq 0 ]]; then
+    log_message "Data compare: PASS" "$GREEN"
+    return 0
+  else
+    log_message "Data compare: FAIL" "$RED"
+    return 1
+  fi
 }
+
 
 Speedtest() {
     local test_file
