@@ -374,7 +374,7 @@ run_benchmark() {
     #echo ""
     #if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     #    print_message "$RED" "Benchmark cancelled."
-    #   Return 1
+    #    Return 1
     #fi
     
     # Define test matrix
@@ -405,15 +405,12 @@ run_benchmark() {
     "ExFAT (APM)|ExFAT|APM"
     
     )
-    
+     
+     # Initialize disk
+       reset_disk_hfs_gpt "$disk"|| true
+
     local total_tests=${#TEST_MATRIX[@]}
     local current_test=0
-
-      # Initialize disk
-      reset_disk_hfs_gpt "$disk"|| true
-
-    # Initialize CSV
-    echo "Test_Number,Format_Name,Filesystem,Partition_Scheme,Filled_Before,Duration(sec),ReadSpeed_before(MB/s),WriteSpeed_before(MB/s),Readspeed_after(MB/s),Writespeed_after(MB/s),Timestamp" > "$RESULTS_CSV"
 
     # Run tests
     for test_config in "${TEST_MATRIX[@]}"; do
@@ -591,6 +588,8 @@ main_menu() {
                 if [ -z "$disk" ]; then
                     print_message "$RED" "Invalid disk identifier"
                 else
+                   # Initialize CSV    
+                    echo "Test_Number,Format_Name,Filesystem,Partition_Scheme,Filled_Before,Duration(sec),ReadSpeed_before(MB/s),WriteSpeed_before(MB/s),Readspeed_after(MB/s),Writespeed_after(MB/s),Timestamp" > "$RESULTS_CSV"
                     quick_benchmark "$disk"
                 fi
                 read -p "Press Enter to continue..."
@@ -604,7 +603,9 @@ main_menu() {
                 if [ -z "$disk" ]; then
                     print_message "$RED" "Invalid disk identifier"
                 else
-                    full_benchmark "$disk"
+                  # Initialize CSV    
+                  echo "Test_Number,Format_Name,Filesystem,Partition_Scheme,Filled_Before,Duration(sec),ReadSpeed_before(MB/s),WriteSpeed_before(MB/s),Readspeed_after(MB/s),Writespeed_after(MB/s),Timestamp" > "$RESULTS_CSV"
+                  full_benchmark "$disk"
                 fi
                 read -p "Press Enter to continue..."
                 ;;
@@ -615,8 +616,10 @@ main_menu() {
                 if [ -z "$disk" ]; then
                     print_message "$RED" "Invalid disk identifier"
                 else
-                    quick_benchmark "$disk"
-                    full_benchmark "$disk"
+                # Initialize CSV    
+                echo "Test_Number,Format_Name,Filesystem,Partition_Scheme,Filled_Before,Duration(sec),ReadSpeed_before(MB/s),WriteSpeed_before(MB/s),Readspeed_after(MB/s),Writespeed_after(MB/s),Timestamp" > "$RESULTS_CSV"
+                quick_benchmark "$disk"
+                full_benchmark "$disk"
                 fi
                 read -p "Press Enter to continue..."
                 ;;
