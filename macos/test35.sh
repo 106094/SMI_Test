@@ -163,9 +163,9 @@ seq_write_test() {
   start=$(now)
   cp -R "$SEQ_SRC/." "$UFD_DST/"
   end=$(now)
-
+  
   duration=$(calc_duration "$start" "$end")
-  size_mb=$(du -sk "$SEQ_SRC" | awk '{print $1/1024}')
+  size_mb=$(du -sk "$UFD_DST" | awk '{print $1/1024}')
   speed=$(calc_speed "$size_mb" "$duration")
 
   log_message "SEQ WRITE: ${speed} MB/s (${duration}s)" "$YELLOW"
@@ -174,16 +174,39 @@ seq_write_test() {
 # ==========================================================
 # STEP D+F: Full  (->100G) + negative copy
 # ==========================================================
-verify_written_size() {
-  written=$(du -sk "$UFD_DST/bigfile.bin" | awk '{print $1 * 1024}')
-  expected=$(du -sk "$SEQ_SRC/bigfile.bin" | awk '{print $1 * 1024}')
- log_message "bigfile.bin in $SEQ_SRC Size is "$expected"" "$YELLOW"
- log_message "bigfile.bin in $UFD_DST Size is "written"" "$YELLOW"
-  if (( written != expected )); then
-    log_message "ERROR: Size mismatch - expected ${expected} bytes, got ${written}" "$RED"
-  
-  Else
-  log_message "Size check: PASS" "$GREEN"
+
+verify_file_size() {
+  local src_path="$1"
+  local dst_path="$2"
+  local filename="bigfile.bin"
+
+  local src_file="$src_path/$filename"
+  local dst_file="$dst_path/$filename"
+
+  # sanity checks
+  [[ ! -f "$src_file" ]] && {
+    log_message "ERROR: Missing source file $src_file" "$RED"
+    return 1
+  }
+
+  [[ ! -f "$dst_file" ]] && {
+    log_message "ERROR: Missing destination file $dst_file" "$RED"
+    return 1
+  }
+
+  local expected written
+  expected=$(stat -f %z "$src_file")
+  written=$(stat -f %z "$dst_file")
+
+  log_message "$filename in $src_path size: $expected bytes" "$YELLOW"
+  log_message "$filename in $dst_path size: $written bytes" "$YELLOW"
+
+  if (( expected != written )); then
+    log_message "ERROR: Size mismatch (expected $expected, got $written)" "$RED"
+    return 1
+  else
+    log_message "Size check: PASS" "$GREEN"
+    return 0
   fi
 }
 
@@ -204,21 +227,7 @@ seq_read_test() {
   log_message "SEQ READ: ${speed} MB/s (${duration}s)" "$YELLOW"
 }
 
-# ==========================================================
-# STEP D+F: Full  (->100G) + negative copy
-# ==========================================================
-verify_read_size() {
-  written=$(du -sk "$UFD_DST/bigfile.bin" | awk '{print $1 * 1024}')
-  expected=$(du -sk "$READBACK_DST/bigfile.bin" | awk '{print $1 * 1024}')
- log_message "bigfile.bin in $UFD_DST Size is "$expected"" "$YELLOW"
- log_message "bigfile.bin in $READBACK_DST Size is "written"" "$YELLOW"
-  if (( written != expected )); then
-    log_message "ERROR: Size mismatch - expected ${expected} bytes, got ${written}" "$RED"
-  
-  Else
-  log_message "Size check: PASS" "$GREEN"
-  fi
-}
+
 # ==========================================================
 # STEP K: Reconnect detection
 # ==========================================================
@@ -242,12 +251,11 @@ reconnect_test() {
 # ==========================================================
 delete_test() {
   local dirrm="$1"
-  log_message "Delete test start"
   start=$(now)
   rm -rf "$dirrm"
   end=$(now)
   duration=$(calc_duration "$start" "$end")
-  log_message "Delete completed in ${duration}s" "$CYAN"
+  log_message "Delete $dirrm completed in ${duration}s" "$CYAN"
 }
 
 # ==========================================================
@@ -421,11 +429,14 @@ main() {
   IFS=',' read readspeed writespeed < <(Speedtest "$mount_point")
   log_message "(after) read speed: ${readspeed}, write speed: ${writespeed}" "$GREEN"
 
-  verify_written_size
-  seq_read_test
-  reconnect_test
-  delete_test "$UFD_DST"
+  verify_file_size "$SEQ_SRC" "$UFD_DST"
   delete_test "$SEQ_SRC"
+  seq_read_test
+  verify_file_size "$UFD_DST" "$READBACK_DST"
+  reconnect_test
+  delete_test "$SEQ_SRC"
+  delete_test "$READBACK_DST"
+  delete_test "$UFD_DST"
 
   log_message "===== Parallel + Self R/W Sub-Test END ====="
   log_message "===== UFD Marketing Workload END =====" "$MAGENTA"
