@@ -139,7 +139,7 @@ prepare_seq_data() {
   test_mb=$((test_bytes / 1024 / 1024))
 
   log_message "SEQ test size: $((test_mb / 1024)) GB ($reason)" "$BLUE" 
-  dd if=/dev/zero of="$SEQ_SRC/bigfile.bin" bs=1M count="$test_mb" status=progress
+  dd if=/dev/zero of="$SEQ_SRC/bigfile.bin" bs=1m count="$test_mb" conv=fsync >/dev/null 2>&1 || true
   expected_bytes=$((test_mb * 1024 * 1024))
   actual_bytes=$(stat -f %z "$SEQ_SRC/bigfile.bin" 2>/dev/null)
 
@@ -277,7 +277,7 @@ prepare_mixed_50pct() {
   large_mb=$((mix_mb * 8 / 10))
   small_files=2000
 
-  dd if=/dev/zero of="$MIX_SRC/large.bin" bs=1M count="$large_mb" status=none
+  dd if=/dev/zero of="$MIX_SRC/large.bin" bs=1m count="$large_mb" conv=fsync >/dev/null 2>&1 || true
 
   mkdir -p "$MIX_SRC/small"
   for i in $(seq 1 $small_files); do
