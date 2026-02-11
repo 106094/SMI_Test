@@ -204,8 +204,10 @@ benchmark_format() {
     local total_tests=$6
     local fill_before=$7
     local extra_args=""
-    local TEST_PW="password123"
+    local testpw="password123"
     local timing_method start_time end_time
+    local apfsvolume
+    local apfsenc
     
     # Unmount disk
     diskutil unmountDisk "$disk" 2>/dev/null || true
@@ -214,11 +216,6 @@ benchmark_format() {
     # Format and measure time
     print_message "$YELLOW" "Formatting with: $filesystem ($partition_scheme)..."
     print_message "$CYAN" "Fill before format: $([ "$fill_before" = "yes" ] && echo "YES" || echo "NO")"
-    
-    if [[ "$format_name" =~ [Ee]ncrypted ]]; then
-        extra_args="-passphrase $TEST_PW"
-        if [[ "$filesystem" == "JHFS+" ]]; then filesystem="JHFS+X"; fi
-    fi
     
     local scheme_cmd=""
     case "$partition_scheme" in
@@ -236,7 +233,19 @@ benchmark_format() {
         start_time=$(python3 -c 'import time; print(time.time())')
     fi
 
-    diskutil eraseDisk "$filesystem" "BENCH" $extra_args "$scheme_cmd" "$disk" 2>&1 | tee -a "$RESULTS_LOG"
+    diskutil eraseDisk "$filesystem" "BENCH" "$scheme_cmd" "$disk" 2>&1 | tee -a "$RESULTS_LOG"
+
+    if [[ "$format_name" =~ [Ee]ncrypted ]]; then
+      apfsvolume=$(diskutil info "BENCH"| grep "Device Identifier" | awk '{print $3}')
+      diskutil apfs encryptVolume $apfsvolume -user disk -passphrase $testpw 2>&1 | tee -a "$RESULTS_LOG"  
+      apfsenc=$(diskutil apfs list| sed -n '/Container disk9/,$p')
+      if echo "$apfsenc" | grep -q "FileVault:.*Yes"; then
+        print_message "$GREEN" "Status: The drive is Encrypted."
+      else
+        print_message "$RED" "Status: Encryption not found."
+      fi
+    fi
+
     end_time=$(date +%s.%N 2>/dev/null || date +%s)
     if [[ "$timing_method" == "python3" ]]; then
         end_time=$(python3 -c 'import time; print(time.time())')
